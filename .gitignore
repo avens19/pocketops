@@ -41,3 +41,8 @@ example
 # generated native folders
 /ios
 /android
+
+# local logs and tooling state
+*.log
+emu.err
+/.claude

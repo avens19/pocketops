@@ -31,8 +31,16 @@ Run lint and typecheck before declaring any task done.
 
 ## Building with EAS
 
-Use EAS to build, sign, and submit the app in the cloud (`eas build`, `eas submit`) and to ship over-the-air updates (`eas update`) — no local Xcode or Android Studio required. Run EAS CLI as `bunx eas-cli <command>` in Bun projects, or `npx eas-cli@latest <command>` otherwise; substitute that for bare `eas` in docs examples.
+**Builds are always local (`eas build --local`); EAS's cloud builders are not used.** A local build runs on the machine that invokes it, so iOS needs a Mac and Android needs macOS or Linux. `eas update` is not a build and is how JS changes ship: channels `development`, `preview`, `simulator` and `production` (see `eas.json`), with `runtimeVersion.policy: appVersion`, so bump `expo.version` in `app.json` whenever native code or config changes, and an update only reaches builds of the same version. Config deliberately mirrors the AgCadence app (`agri-crm/apps/mobile`).
+Run EAS CLI as `npx eas-cli@latest <command>`.
 Docs: https://docs.expo.dev/eas/index.md
+
+## SigNoz API
+
+- Auth is a `SIGNOZ-API-KEY` header carrying a service-account key; a Viewer role is enough and the app is read-only.
+- Endpoints and response shapes come from `docs/api/openapi.yml` in the SigNoz repo, not from their docs site, which omits most response models. Those endpoints are marked `alpha`, so expect drift; `src/lib/signoz/api.ts` falls back across rule-list generations (`/api/v3/rules` → `v2` → `v1`).
+- `tools/mock-signoz/server.mjs` is a fixture server (key `test-key`, default port 3301; from the Android emulator use `http://10.0.2.2:3301`). It is shaped after the spec, so it cannot catch a disagreement between the spec and a real server.
+- Plain `http` is accepted only for private-network hosts (`isPrivateHost` in `src/lib/signoz/client.ts`).
 
 ## Rules
 
