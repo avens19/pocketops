@@ -14,6 +14,10 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Logs</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="text.alignleft" md="article" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="traces">
+        <NativeTabs.Trigger.Label>Traces</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="point.3.connected.trianglepath.dotted" md="account_tree" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="services">
         <NativeTabs.Trigger.Label>Services</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="waveform.path.ecg" md="monitor_heart" />
@@ -21,10 +25,6 @@ export default function TabsLayout() {
       <NativeTabs.Trigger name="metrics">
         <NativeTabs.Trigger.Label>Metrics</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="chart.xyaxis.line" md="show_chart" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="link">
-        <NativeTabs.Trigger.Label>Open</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="link" md="link" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

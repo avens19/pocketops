@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -50,8 +49,8 @@ export default function ConnectScreen() {
 
   return (
     <SafeAreaView style={[styles.flex, { backgroundColor: theme.background }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
           <View style={styles.header}>
             <ThemedText type="title">PocketOps</ThemedText>
             <ThemedText color="textSecondary">Alerts, logs and services from your SigNoz, on your phone.</ThemedText>

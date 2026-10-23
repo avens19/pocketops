@@ -86,7 +86,7 @@ const LEVEL_TEXTS: Record<LogLevel, string[]> = {
 
 export interface LogFilter {
   text?: string;
-  /** Raw filter expression; when set it replaces `text`. */
+  /** Structured filter expression (the chips); ANDed with `text`. */
   expression?: string;
   levels?: LogLevel[];
   service?: string;
@@ -97,7 +97,7 @@ export function logFilterExpression(f: LogFilter): string {
   const parts: string[] = [];
   if (f.id) parts.push(`id = ${quote(f.id)}`);
   if (f.expression?.trim()) parts.push(`(${f.expression.trim()})`);
-  else if (f.text?.trim()) parts.push(`body CONTAINS ${quote(f.text.trim())}`);
+  if (f.text?.trim()) parts.push(`body CONTAINS ${quote(f.text.trim())}`);
   if (f.levels?.length) {
     const texts = f.levels.flatMap((l) => LEVEL_TEXTS[l]);
     parts.push(`severity_text IN (${texts.map(quote).join(', ')})`);
@@ -224,8 +224,10 @@ export function spanGroupsQuery(range: TimeRange, expression: string, groupBy: s
   ]);
 }
 
-/** The most recent spans matching an explorer filter. */
-export function spanListQuery(range: TimeRange, expression: string, limit: number) {
+export type SpanSort = 'latest' | 'slowest';
+
+/** Spans matching an explorer filter, newest first or slowest first, one page at a time. */
+export function spanListQuery(range: TimeRange, expression: string, limit: number, offset = 0, sort: SpanSort = 'latest') {
   return body(range, 'raw', [
     {
       type: 'builder_query',
@@ -233,10 +235,34 @@ export function spanListQuery(range: TimeRange, expression: string, limit: numbe
         name: 'A',
         signal: 'traces',
         filter: { expression },
-        selectFields: ['service.name', 'name', 'duration_nano', 'trace_id', 'has_error', 'status_message'].map((name) => ({ name })),
+        selectFields: ['service.name', 'name', 'duration_nano', 'trace_id', 'span_id', 'has_error', 'status_message', 'http.route', 'http.response.status_code'].map((name) => ({ name })),
+        limit,
+        offset,
+        // span_id breaks ties (equal durations or timestamps are common), or offset paging can repeat or skip spans.
+        order: [
+          sort === 'slowest'
+            ? { key: { name: 'duration_nano', fieldContext: 'span' }, direction: 'desc' }
+            : { key: { name: 'timestamp', fieldContext: 'span' }, direction: 'desc' },
+          { key: { name: 'span_id', fieldContext: 'span' }, direction: 'desc' },
+        ],
+      },
+    },
+  ]);
+}
+
+/** Every span of one trace, as bare rows. A fallback for servers without the waterfall endpoint. */
+export function traceSpansQuery(range: TimeRange, traceId: string, limit: number) {
+  return body(range, 'raw', [
+    {
+      type: 'builder_query',
+      spec: {
+        name: 'A',
+        signal: 'traces',
+        filter: { expression: `trace_id = ${quote(traceId)}` },
+        selectFields: ['span_id', 'parent_span_id', 'name', 'service.name', 'duration_nano', 'has_error', 'status_message', 'kind_string'].map((name) => ({ name })),
         limit,
         offset: 0,
-        order: [{ key: { name: 'timestamp', fieldContext: 'span' }, direction: 'desc' }],
+        order: [{ key: { name: 'timestamp', fieldContext: 'span' }, direction: 'asc' }],
       },
     },
   ]);
@@ -341,8 +367,14 @@ export function parseTimeSeries(resp: QueryRangeData | undefined, aliases: strin
   const aggregations = firstResult(resp)?.aggregations;
   if (!Array.isArray(aggregations)) return [];
   const out: Series[] = [];
-  aggregations.forEach((agg, n) => {
-    const a = agg as { alias?: string; series?: { labels?: { key?: { name?: string }; value?: unknown }[]; values?: RawSeriesValue[] }[] };
+  aggregations.forEach((agg, position) => {
+    const a = agg as {
+      index?: number;
+      alias?: string;
+      series?: { labels?: { key?: { name?: string }; value?: unknown }[]; values?: RawSeriesValue[] }[];
+    };
+    // A real SigNoz does not return aggregations in request order, so name them by the index each one carries.
+    const n = typeof a.index === 'number' ? a.index : position;
     for (const s of a.series ?? []) {
       const labels: Record<string, string> = {};
       for (const l of s.labels ?? []) {
@@ -354,7 +386,9 @@ export function parseTimeSeries(resp: QueryRangeData | undefined, aliases: strin
         labels,
         points: (s.values ?? [])
           .filter((v) => !v.partial && Number.isFinite(v.value))
-          .map((v) => ({ t: v.timestamp, v: v.value })),
+          .map((v) => ({ t: v.timestamp, v: v.value }))
+          // ...nor are buckets in time order; a chart needs them sorted.
+          .sort((x, y) => x.t - y.t),
       });
     }
   });

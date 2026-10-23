@@ -14,9 +14,13 @@ import {
   serviceSeriesQuery,
   spanGroupsQuery,
   spanListQuery,
+  type SpanSort,
   servicesQuery,
   topOperationsQuery,
+  traceSpansQuery,
 } from './queries';
+import { parseRuleQuery, type RuleQuery } from '../rule-query';
+import { buildTree, parseWaterfall, type FlatSpan, type TraceDetail } from '../trace';
 import type {
   AlertState,
   FiringAlert,
@@ -155,6 +159,19 @@ export async function ruleTimeline(
       : asStringMap(i.labels),
     stateChanged: i.stateChanged === true,
   }));
+}
+
+/** The query an alert rule evaluates, or null for a rule without a builder query (PromQL, ClickHouse). */
+export async function fetchRuleQuery(client: SignozClient, ruleId: string, signal?: AbortSignal): Promise<RuleQuery | null> {
+  const id = encodeURIComponent(ruleId);
+  let data: unknown;
+  try {
+    data = await client.request<unknown>(`/api/v2/rules/${id}`, { signal });
+  } catch (e) {
+    if (!(e instanceof SignozError) || e.kind !== 'not-found') throw e;
+    data = await client.request<unknown>(`/api/v1/rules/${id}`, { signal });
+  }
+  return parseRuleQuery(data);
 }
 
 // ---- logs ------------------------------------------------------------------------------------
@@ -324,24 +341,29 @@ export interface SpanRow {
   name: string;
   service: string;
   traceId: string;
+  spanId: string;
   durationMs: number;
   hasError: boolean;
   message: string;
 }
 
+export const SPAN_PAGE_SIZE = 50;
+
 export async function fetchSpans(
   client: SignozClient,
   range: TimeRange,
   expression: string,
-  limit = 50,
+  offset = 0,
+  sort: SpanSort = 'latest',
   signal?: AbortSignal,
 ): Promise<SpanRow[]> {
-  const resp = await queryRange(client, spanListQuery(range, expression, limit), signal);
+  const resp = await queryRange(client, spanListQuery(range, expression, SPAN_PAGE_SIZE, offset, sort), signal);
   return parseRawRows(resp).map((r) => ({
     timestamp: r.timestamp,
     name: String(r.data.name ?? ''),
     service: String(r.data['service.name'] ?? r.data.serviceName ?? r.data['resource_string_service$$name'] ?? ''),
     traceId: String(r.data.trace_id ?? ''),
+    spanId: String(r.data.span_id ?? ''),
     durationMs: num(r.data.duration_nano) / 1e6,
     hasError: r.data.has_error === true || r.data.has_error === 'true',
     message: String(r.data.status_message ?? ''),
@@ -392,4 +414,94 @@ export async function fetchMetricSeries(
     return run(`${metric.name}.bucket`);
   }
   return series;
+}
+
+// ---- fields (filter autocomplete) -----------------------------------------------------------
+
+export type FieldSignal = 'logs' | 'traces';
+
+export interface FieldKey {
+  name: string;
+  /** resource, attribute, log, span, ... */
+  context: string;
+  dataType: string;
+}
+
+/** Names of the attributes seen in the window, optionally narrowed by a substring. */
+export async function fetchFieldKeys(
+  client: SignozClient,
+  signal: FieldSignal,
+  search: string,
+  range: TimeRange,
+  abort?: AbortSignal,
+): Promise<FieldKey[]> {
+  const data = await client.request<{ keys?: Record<string, Json[]> | null }>('/api/v1/fields/keys', {
+    query: { signal, searchText: search || undefined, limit: 40, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
+    signal: abort,
+  });
+  const seen = new Set<string>();
+  const out: FieldKey[] = [];
+  for (const variants of Object.values(data?.keys ?? {})) {
+    for (const k of variants) {
+      const name = String(k.name ?? '');
+      if (!name || seen.has(name)) continue;
+      seen.add(name);
+      out.push({ name, context: String(k.fieldContext ?? ''), dataType: String(k.fieldDataType ?? '') });
+    }
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Values seen for one field in the window, optionally narrowed by a substring. */
+export async function fetchFieldValues(
+  client: SignozClient,
+  signal: FieldSignal,
+  name: string,
+  search: string,
+  range: TimeRange,
+  abort?: AbortSignal,
+): Promise<string[]> {
+  const data = await client.request<{ values?: Record<string, unknown[] | null> | null }>('/api/v1/fields/values', {
+    query: { signal, name, searchText: search || undefined, limit: 30, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
+    signal: abort,
+  });
+  const values = data?.values ?? {};
+  return [...(values.stringValues ?? []), ...(values.numberValues ?? []), ...(values.boolValues ?? [])]
+    .filter((v) => v !== null && v !== undefined && v !== '')
+    .map(String);
+}
+
+// ---- traces ---------------------------------------------------------------------------------
+
+const TRACE_SPAN_LIMIT = 2000;
+
+/**
+ * One trace with its spans in tree order. Uses the waterfall endpoint (which also carries attributes and events);
+ * a server without it gets the bare spans from a query instead, so the screen still works with less detail.
+ */
+export async function fetchTrace(client: SignozClient, traceId: string, signal?: AbortSignal): Promise<TraceDetail> {
+  try {
+    const data = await client.request<unknown>(`/api/v4/traces/${encodeURIComponent(traceId)}/waterfall`, {
+      method: 'POST',
+      body: { uncollapsedSpans: [] },
+      signal,
+    });
+    return parseWaterfall(traceId, data);
+  } catch (e) {
+    if (!(e instanceof SignozError) || (e.kind !== 'not-found' && e.kind !== 'bad-request')) throw e;
+  }
+  const now = Date.now();
+  const resp = await queryRange(client, traceSpansQuery({ startMs: now - 7 * 24 * 60 * 60_000, endMs: now }, traceId, TRACE_SPAN_LIMIT), signal);
+  const flat: FlatSpan[] = parseRawRows(resp).map((r) => ({
+    id: String(r.data.span_id ?? ''),
+    parentId: String(r.data.parent_span_id ?? ''),
+    name: String(r.data.name ?? ''),
+    service: String(r.data['service.name'] ?? ''),
+    kind: String(r.data.kind_string ?? ''),
+    startMs: Date.parse(r.timestamp) || 0,
+    durationMs: num(r.data.duration_nano) / 1e6,
+    hasError: r.data.has_error === true || r.data.has_error === 'true',
+    statusMessage: String(r.data.status_message ?? ''),
+  }));
+  return buildTree(traceId, flat, flat.length >= TRACE_SPAN_LIMIT);
 }

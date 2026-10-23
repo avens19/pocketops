@@ -1,21 +1,26 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useLocalSearchParams } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Chip } from '@/components/chip';
+import { FilterBar } from '@/components/filter-bar';
 import { Empty, ErrorState, Loading } from '@/components/query-state';
-import { RangePicker } from '@/components/range-picker';
+import { RangeChip } from '@/components/range-chip';
 import { SearchField } from '@/components/search-field';
 import { severityColor } from '@/components/severity';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useDebounced } from '@/hooks/use-debounced';
+import { useWindowAnchor } from '@/hooks/use-window-anchor';
 import { useTheme } from '@/hooks/use-theme';
 import { useClient } from '@/lib/auth';
+import { explorer, useExplorer } from '@/lib/explorer-state';
+import { clausesToExpression } from '@/lib/filters';
+import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
 import { LOG_PAGE_SIZE, fetchLogs } from '@/lib/signoz/api';
 import {
   LOG_LEVELS,
-  describeRange,
   rangeSpecFromParams,
   resolveRange,
   type LogFilter,
@@ -24,12 +29,13 @@ import {
 } from '@/lib/signoz/queries';
 import type { LogRow } from '@/lib/signoz/types';
 
-type LogsParams = { service?: string; q?: string; last?: string; from?: string; to?: string };
+type LogsParams = ExploreParams;
+
 
 export default function LogsScreen() {
   const params = useLocalSearchParams<LogsParams>();
-  // A pasted explorer link can arrive while this screen is open; a new key restarts the view from its params.
-  return <LogsView key={`${params.q}|${params.last}|${params.from}|${params.to}|${params.service}`} params={params} />;
+  // The window comes from the params too, so a new link restarts the view.
+  return <LogsView key={`${params.last}|${params.from}|${params.to}`} params={params} />;
 }
 
 function LogsView({ params }: { params: LogsParams }) {
@@ -37,68 +43,56 @@ function LogsView({ params }: { params: LogsParams }) {
   const theme = useTheme();
 
   const [range, setRange] = useState<RangeSpec>(() => rangeSpecFromParams(params) ?? { key: '1h' });
-  const [draft, setDraft] = useState(params.q ?? '');
-  const [advanced, setAdvanced] = useState(!!params.q);
-  const [applied, setApplied] = useState(params.q ?? '');
+  const { clauses, text, sig } = useExplorer('logs');
   const [levels, setLevels] = useState<LogLevel[]>([]);
-  // The window is fixed per query so paging by offset is not disturbed by logs arriving meanwhile.
-  const [anchor, setAnchor] = useState(() => Date.now());
 
-  const filter: LogFilter = useMemo(
-    () => ({
-      text: advanced ? undefined : applied,
-      expression: advanced ? applied : undefined,
-      levels,
-      service: params.service,
-    }),
-    [advanced, applied, levels, params.service],
-  );
+  // A link, "view logs for this service/trace" or a pasted URL arrives as params and replaces the filter. Hold the
+  // first request until that has landed, so it is the right one.
+  const routeSig = exploreSignature(params);
+  const landed = !hasExploreFilter(params) || sig === routeSig;
+  useEffect(() => {
+    applyRouteFilter('logs', params);
+  }, [params, routeSig]);
+
+  const expression = clausesToExpression(clauses);
+  const searchText = useDebounced(text.trim(), 400);
+  const filter: LogFilter = { text: searchText, expression, levels };
+
+  // The window end is fixed per query so paging by offset is not disturbed by logs arriving meanwhile.
+  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, expression, searchText, levels]));
+  const resolved = resolveRange(range, anchor);
 
   const logs = useInfiniteQuery({
     queryKey: ['logs', client.endpoint, range, anchor, filter],
+    enabled: landed,
     initialPageParam: 0,
-    queryFn: ({ pageParam, signal }) => fetchLogs(client, resolveRange(range, anchor), filter, pageParam, signal),
+    queryFn: ({ pageParam, signal }) => fetchLogs(client, resolved, filter, pageParam, signal),
     getNextPageParam: (last, all) => (last.length === LOG_PAGE_SIZE ? all.length * LOG_PAGE_SIZE : undefined),
     gcTime: 60_000,
   });
 
   const rows = useMemo(() => logs.data?.pages.flat() ?? [], [logs.data]);
-  const refresh = useCallback(() => setAnchor(Date.now()), []);
   const toggleLevel = (l: LogLevel) => setLevels((cur) => (cur.includes(l) ? cur.filter((x) => x !== l) : [...cur, l]));
 
   const header = (
     <View style={styles.header}>
       <SearchField
-        value={draft}
-        onChangeText={setDraft}
-        onSubmitEditing={() => {
-          setApplied(draft);
-          setAnchor(Date.now());
-        }}
-        placeholder={advanced ? "service.name = 'api' AND http.status_code >= 500" : 'Search log messages'}
+        value={text}
+        onChangeText={(t) => explorer.setText('logs', t)}
+        placeholder="Search log messages"
       />
+      <FilterBar signal="logs" range={resolved} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        <Chip label={advanced ? 'Query' : 'Text'} selected onPress={() => setAdvanced((v) => !v)} />
+        <RangeChip value={range} onChange={(key) => setRange({ key })} />
         {LOG_LEVELS.map((l) => (
           <Chip key={l} label={l} selected={levels.includes(l)} onPress={() => toggleLevel(l)} />
         ))}
       </ScrollView>
-      <RangePicker
-        value={'key' in range ? range.key : null}
-        onChange={(key) => {
-          setRange({ key });
-          setAnchor(Date.now());
-        }}
-      />
-      {'key' in range ? null : <ThemedText type="caption">{describeRange(range)}</ThemedText>}
-      {params.service ? (
-        <ThemedText type="caption">Showing service: {params.service}</ThemedText>
-      ) : null}
     </View>
   );
 
   let body: React.ReactNode = null;
-  if (logs.isPending) body = <Loading />;
+  if (!landed || logs.isPending) body = <Loading />;
   else if (logs.isError && rows.length === 0) body = <ErrorState error={logs.error} onRetry={() => logs.refetch()} />;
   else if (rows.length === 0) body = <Empty title="No logs found" hint="Try a wider time range or fewer filters." />;
 

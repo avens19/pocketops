@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -13,7 +13,8 @@ import { Spacing } from '@/constants/theme';
 import { useClient } from '@/lib/auth';
 import { formatCount, formatDuration, formatPercent, formatTime } from '@/lib/format';
 import { fetchErrorSpans, fetchServiceSeries, fetchTopOperations } from '@/lib/signoz/api';
-import { RANGES, rangeFor, stepSeconds, type RangeKey } from '@/lib/signoz/queries';
+import { explorer } from '@/lib/explorer-state';
+import { RANGES, quote, rangeFor, stepSeconds, type RangeKey } from '@/lib/signoz/queries';
 import type { Series } from '@/lib/signoz/types';
 
 type Panel = 'requests' | 'latency' | 'errors';
@@ -21,6 +22,7 @@ type Panel = 'requests' | 'latency' | 'errors';
 export default function ServiceDetailScreen() {
   const { name, range: rangeParam } = useLocalSearchParams<{ name: string; range?: string }>();
   const client = useClient();
+  const router = useRouter();
   const [rangeKey, setRangeKey] = useState<RangeKey>(RANGES.some((r) => r.key === rangeParam) ? (rangeParam as RangeKey) : '1h');
   const [panel, setPanel] = useState<Panel>('requests');
 
@@ -75,13 +77,29 @@ export default function ServiceDetailScreen() {
         )}
       </Card>
 
-      <Link href={{ pathname: '/logs', params: { service: name } }} asChild>
-        <Pressable accessibilityRole="link">
-          <ThemedText color="accent" style={styles.bold}>
-            View logs for this service ›
-          </ThemedText>
-        </Pressable>
-      </Link>
+      <View style={styles.chips}>
+        <Chip
+          label="Logs"
+          onPress={() => {
+            explorer.setExpression('logs', `service.name = ${quote(name)}`);
+            router.navigate('/logs');
+          }}
+        />
+        <Chip
+          label="Traces"
+          onPress={() => {
+            explorer.setExpression('traces', `service.name = ${quote(name)}`);
+            router.navigate('/traces');
+          }}
+        />
+        <Chip
+          label="Errors"
+          onPress={() => {
+            explorer.setExpression('traces', `service.name = ${quote(name)} AND has_error = true`);
+            router.navigate('/traces');
+          }}
+        />
+      </View>
 
       <View style={styles.section}>
         <ThemedText type="caption" style={styles.sectionTitle}>
@@ -94,7 +112,15 @@ export default function ServiceDetailScreen() {
         ) : (
           <Card style={styles.table}>
             {(operations.data ?? []).map((op) => (
-              <View key={op.name} style={styles.opRow}>
+              <Pressable
+                key={op.name}
+                accessibilityRole="button"
+                accessibilityLabel={`${op.name}: show traces`}
+                onPress={() => {
+                  explorer.setExpression('traces', `service.name = ${quote(name)} AND name = ${quote(op.name)}`);
+                  router.navigate('/traces');
+                }}
+                style={styles.opRow}>
                 <ThemedText type="small" numberOfLines={1} style={styles.flex}>
                   {op.name}
                 </ThemedText>
@@ -110,7 +136,7 @@ export default function ServiceDetailScreen() {
                   style={styles.num}>
                   {formatPercent(op.calls > 0 ? op.errors / op.calls : 0)}
                 </ThemedText>
-              </View>
+              </Pressable>
             ))}
             {(operations.data ?? []).length === 0 ? (
               <ThemedText type="small" color="textSecondary">
@@ -135,19 +161,23 @@ export default function ServiceDetailScreen() {
           </ThemedText>
         ) : (
           (errors.data ?? []).map((e, i) => (
-            <Card key={`${e.traceId}-${i}`}>
-              <ThemedText type="small" style={styles.bold}>
-                {e.name}
-              </ThemedText>
-              {e.message ? (
-                <ThemedText type="small" color="danger" numberOfLines={3}>
-                  {e.message}
-                </ThemedText>
-              ) : null}
-              <ThemedText type="caption">
-                {formatTime(e.timestamp)} · {formatDuration(e.durationMs)}
-              </ThemedText>
-            </Card>
+            <Link key={`${e.traceId}-${i}`} href={`/trace/${encodeURIComponent(e.traceId)}`} asChild>
+              <Pressable accessibilityRole="button">
+                <Card>
+                  <ThemedText type="small" style={styles.bold}>
+                    {e.name}
+                  </ThemedText>
+                  {e.message ? (
+                    <ThemedText type="small" color="danger" numberOfLines={3}>
+                      {e.message}
+                    </ThemedText>
+                  ) : null}
+                  <ThemedText type="caption">
+                    {formatTime(e.timestamp)} · {formatDuration(e.durationMs)}
+                  </ThemedText>
+                </Card>
+              </Pressable>
+            </Link>
           ))
         )}
       </View>

@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
-import { KeyValues } from '@/components/key-values';
+import { AttributeList } from '@/components/attribute-list';
+import { Chip } from '@/components/chip';
 import { Empty, ErrorState, Loading } from '@/components/query-state';
 import { severityColor } from '@/components/severity';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useClient } from '@/lib/auth';
+import { explorer } from '@/lib/explorer-state';
 import { formatTime } from '@/lib/format';
 import { fetchLogById } from '@/lib/signoz/api';
 
@@ -19,6 +21,7 @@ export default function LogDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const client = useClient();
   const theme = useTheme();
+  const router = useRouter();
   const [copied, setCopied] = useState(false);
 
   const log = useQuery({
@@ -63,34 +66,41 @@ export default function LogDetailScreen() {
         </Pressable>
       </Card>
 
-      {row.service ? (
-        <Link href={`/services/${encodeURIComponent(row.service)}`} asChild>
-          <Pressable accessibilityRole="link">
-            <ThemedText color="accent" style={styles.bold}>
-              Service: {row.service} ›
-            </ThemedText>
-          </Pressable>
-        </Link>
-      ) : null}
-      {row.traceId ? (
-        <View>
-          <ThemedText type="caption">trace_id</ThemedText>
-          <ThemedText type="mono" selectable>
-            {row.traceId}
-          </ThemedText>
-        </View>
-      ) : null}
+      <View style={styles.actions}>
+        {row.service ? (
+          <Link href={`/services/${encodeURIComponent(row.service)}`} asChild>
+            <Chip label={`Service · ${row.service}`} />
+          </Link>
+        ) : null}
+        {row.traceId ? (
+          <>
+            <Link href={`/trace/${encodeURIComponent(row.traceId)}`} asChild>
+              <Chip label="View trace" />
+            </Link>
+            <Chip
+              label="Logs in this trace"
+              onPress={() => {
+                explorer.setExpression('logs', `trace_id = '${row.traceId}'`);
+                router.navigate('/logs');
+              }}
+            />
+          </>
+        ) : null}
+      </View>
 
       {Object.keys(row.attributes).length > 0 ? (
         <Section title="Attributes">
-          <KeyValues values={row.attributes} />
+          <AttributeList values={row.attributes} primary="logs" />
         </Section>
       ) : null}
       {Object.keys(row.resources).length > 0 ? (
         <Section title="Resource">
-          <KeyValues values={row.resources} />
+          <AttributeList values={row.resources} primary="logs" />
         </Section>
       ) : null}
+      <ThemedText type="caption" style={styles.hint}>
+        Tap an attribute to filter by it.
+      </ThemedText>
     </ScrollView>
   );
 }
@@ -110,6 +120,8 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.three, gap: Spacing.three },
   meta: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },
   bold: { fontWeight: '600' },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  hint: { textAlign: 'center' },
   section: { gap: Spacing.two },
   sectionTitle: { fontWeight: '700', letterSpacing: 0.6 },
 });

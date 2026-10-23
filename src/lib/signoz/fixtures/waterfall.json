@@ -1,0 +1,383 @@
+{
+ "status": "success",
+ "data": {
+  "startTimestampMillis": 1792709405643,
+  "endTimestampMillis": 1792709405864,
+  "rootServiceName": "gateway",
+  "rootServiceEntryPoint": "POST /api/checkout",
+  "totalSpansCount": 8,
+  "totalErrorSpansCount": 5,
+  "spans": [
+   {
+    "attributes": {
+     "client.address": "10.4.43.156",
+     "enduser.id": "user-1000",
+     "http.request.method": "POST",
+     "http.response.status_code": 502,
+     "http.route": "/api/checkout",
+     "url.path": "/api/checkout"
+    },
+    "duration_nano": 221000000,
+    "events": [],
+    "flags": 0,
+    "has_error": true,
+    "is_remote": "unknown",
+    "kind_string": "Server",
+    "name": "POST /api/checkout",
+    "parent_span_id": "",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-1z",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "gateway-7c9d-m8q1z",
+     "service.name": "gateway",
+     "service.version": "3.4.1",
+     "telemetry.sdk.language": "nodejs"
+    },
+    "span_id": "b7ff9d9ffe98aa9f",
+    "time_unix": 1792709405643,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "http_host": "10.4.43.156",
+    "http_method": "POST",
+    "response_status_code": "502",
+    "status_code": 2,
+    "status_code_string": "Error",
+    "status_message": "upstream stripe request timed out after 3000ms",
+    "sub_tree_node_count": 8,
+    "has_children": true,
+    "level": 0
+   },
+   {
+    "attributes": {
+     "enduser.id": "user-1000",
+     "http.request.method": "POST",
+     "http.response.status_code": 502,
+     "http.route": "/api/checkout"
+    },
+    "duration_nano": 216000000,
+    "events": [
+     {
+      "name": "exception",
+      "timeUnixNano": 1792709405860000000,
+      "attributeMap": {
+       "exception.message": "upstream stripe request timed out after 3000ms",
+       "exception.stacktrace": "UpstreamTimeoutError: upstream stripe request timed out after 3000ms\n    at CheckoutHandler.handle (checkout.js:142:19)\n    at Layer.handle (router.js:95:5)",
+       "exception.type": "UpstreamTimeoutError"
+      },
+      "isError": true
+     }
+    ],
+    "flags": 0,
+    "has_error": true,
+    "is_remote": "unknown",
+    "kind_string": "Server",
+    "name": "POST /api/checkout",
+    "parent_span_id": "b7ff9d9ffe98aa9f",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-9w",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "checkout-5b8f-p2v9w",
+     "service.name": "checkout",
+     "service.version": "2.17.0",
+     "telemetry.sdk.language": "java"
+    },
+    "span_id": "36c280d0a3678506",
+    "time_unix": 1792709405645,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "b7ff9d9ffe98aa9f",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "http_method": "POST",
+    "response_status_code": "502",
+    "status_code": 2,
+    "status_code_string": "Error",
+    "status_message": "upstream stripe request timed out after 3000ms",
+    "sub_tree_node_count": 7,
+    "has_children": true,
+    "level": 1
+   },
+   {
+    "attributes": {
+     "db.system": "redis",
+     "rpc.method": "Reserve",
+     "rpc.system": "grpc"
+    },
+    "duration_nano": 12000000,
+    "events": [],
+    "flags": 0,
+    "has_error": false,
+    "is_remote": "unknown",
+    "kind_string": "Server",
+    "name": "inventory.reserve",
+    "parent_span_id": "36c280d0a3678506",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-3r",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "inventory-84cc-j6w3r",
+     "service.name": "inventory",
+     "service.version": "4.2.0",
+     "telemetry.sdk.language": "python"
+    },
+    "span_id": "30b3e4bb7d2d00b8",
+    "time_unix": 1792709405646,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "36c280d0a3678506",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "status_code_string": "Unset",
+    "sub_tree_node_count": 2,
+    "has_children": true,
+    "level": 2
+   },
+   {
+    "attributes": {
+     "db.statement": "GET stock:sku-233",
+     "db.system": "redis"
+    },
+    "duration_nano": 6000000,
+    "events": [],
+    "flags": 0,
+    "has_error": false,
+    "is_remote": "unknown",
+    "kind_string": "Client",
+    "name": "GET stock:*",
+    "parent_span_id": "30b3e4bb7d2d00b8",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-3r",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "inventory-84cc-j6w3r",
+     "service.name": "inventory",
+     "service.version": "4.2.0",
+     "telemetry.sdk.language": "python"
+    },
+    "span_id": "dbb7e9d0293b9f80",
+    "time_unix": 1792709405647,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "30b3e4bb7d2d00b8",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "status_code_string": "Unset",
+    "sub_tree_node_count": 1,
+    "has_children": false,
+    "level": 3
+   },
+   {
+    "attributes": {
+     "rpc.method": "Charge",
+     "rpc.system": "grpc"
+    },
+    "duration_nano": 169000000,
+    "events": [],
+    "flags": 0,
+    "has_error": true,
+    "is_remote": "unknown",
+    "kind_string": "Client",
+    "name": "payments.charge",
+    "parent_span_id": "36c280d0a3678506",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-9w",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "checkout-5b8f-p2v9w",
+     "service.name": "checkout",
+     "service.version": "2.17.0",
+     "telemetry.sdk.language": "java"
+    },
+    "span_id": "14154bee05e8d37f",
+    "time_unix": 1792709405659,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "36c280d0a3678506",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "status_code": 2,
+    "status_code_string": "Error",
+    "status_message": "upstream stripe request timed out after 3000ms",
+    "sub_tree_node_count": 4,
+    "has_children": true,
+    "level": 2
+   },
+   {
+    "attributes": {
+     "enduser.id": "user-1000",
+     "payment.amount_cents": 9504,
+     "payment.currency": "USD",
+     "payment.error_code": "gateway_timeout",
+     "payment.provider": "stripe",
+     "rpc.method": "Charge",
+     "rpc.system": "grpc"
+    },
+    "duration_nano": 167000000,
+    "events": [
+     {
+      "name": "exception",
+      "timeUnixNano": 1792709405826000000,
+      "attributeMap": {
+       "exception.message": "upstream stripe request timed out after 3000ms",
+       "exception.stacktrace": "UpstreamTimeoutError: upstream stripe request timed out after 3000ms\n    at charge (payments/charge.go:88)\n    at handler (payments/server.go:41)",
+       "exception.type": "UpstreamTimeoutError"
+      },
+      "isError": true
+     }
+    ],
+    "flags": 0,
+    "has_error": true,
+    "is_remote": "unknown",
+    "kind_string": "Server",
+    "name": "payments.Charge",
+    "parent_span_id": "14154bee05e8d37f",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-vb",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "payments-66d4-lq8vb",
+     "service.name": "payments",
+     "service.version": "1.9.4",
+     "telemetry.sdk.language": "go"
+    },
+    "span_id": "ac195ef38216a595",
+    "time_unix": 1792709405660,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "14154bee05e8d37f",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "status_code": 2,
+    "status_code_string": "Error",
+    "status_message": "upstream stripe request timed out after 3000ms",
+    "sub_tree_node_count": 3,
+    "has_children": true,
+    "level": 3
+   },
+   {
+    "attributes": {
+     "db.operation": "INSERT",
+     "db.statement": "INSERT INTO payments (id, user_id, amount_cents, status) VALUES ($1, $2, $3, $4)",
+     "db.system": "postgresql"
+    },
+    "duration_nano": 5000000,
+    "events": [],
+    "flags": 0,
+    "has_error": false,
+    "is_remote": "unknown",
+    "kind_string": "Client",
+    "name": "INSERT payments",
+    "parent_span_id": "ac195ef38216a595",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-vb",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "payments-66d4-lq8vb",
+     "service.name": "payments",
+     "service.version": "1.9.4",
+     "telemetry.sdk.language": "go"
+    },
+    "span_id": "8872dcde28f5c757",
+    "time_unix": 1792709405662,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "ac195ef38216a595",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "db_operation": "INSERT",
+    "status_code_string": "Unset",
+    "sub_tree_node_count": 1,
+    "has_children": false,
+    "level": 4
+   },
+   {
+    "attributes": {
+     "http.request.method": "POST",
+     "http.response.status_code": 502,
+     "server.address": "api.stripe.com"
+    },
+    "duration_nano": 145000000,
+    "events": [],
+    "flags": 0,
+    "has_error": true,
+    "is_remote": "unknown",
+    "kind_string": "Client",
+    "name": "POST api.stripe.com/v1/charges",
+    "parent_span_id": "ac195ef38216a595",
+    "resource": {
+     "deployment.environment": "production",
+     "host.name": "node-vb",
+     "k8s.cluster.name": "prod-east",
+     "k8s.namespace.name": "production",
+     "k8s.pod.name": "payments-66d4-lq8vb",
+     "service.name": "payments",
+     "service.version": "1.9.4",
+     "telemetry.sdk.language": "go"
+    },
+    "span_id": "2edb8e8b36a5ed8a",
+    "time_unix": 1792709405677,
+    "trace_id": "2e07a1ae04581839a4ea0f0e6248e14a",
+    "trace_state": "",
+    "references": [
+     {
+      "traceId": "2e07a1ae04581839a4ea0f0e6248e14a",
+      "spanId": "ac195ef38216a595",
+      "refType": "CHILD_OF"
+     }
+    ],
+    "external_http_method": "POST",
+    "http_host": "api.stripe.com",
+    "http_method": "POST",
+    "response_status_code": "502",
+    "status_code": 2,
+    "status_code_string": "Error",
+    "status_message": "upstream stripe request timed out after 3000ms",
+    "sub_tree_node_count": 1,
+    "has_children": false,
+    "level": 4
+   }
+  ],
+  "hasMissingSpans": false,
+  "uncollapsedSpans": null,
+  "hasMore": false
+ }
+}

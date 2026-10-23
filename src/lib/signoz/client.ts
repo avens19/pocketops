@@ -96,7 +96,8 @@ export interface RequestOptions {
 export class SignozClient {
   constructor(
     readonly credentials: Credentials,
-    private readonly fetchImpl: typeof fetch = fetch,
+    // Wrapped, not `fetch` itself: browsers throw "Illegal invocation" when fetch runs with `this` set to the client.
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   get endpoint() {

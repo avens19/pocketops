@@ -68,10 +68,9 @@ describe('routeForUrl', () => {
     expect(url.searchParams.get('last')).toBe(String(86_400_000));
   });
 
-  it('opens traces for a single trace id link', () => {
-    const url = new URL(routeForUrl('https://s.example.com/trace/abc123?spanId=x')!, 'app://x');
-    expect(url.pathname).toBe('/traces');
-    expect(url.searchParams.get('q')).toBe("trace_id = 'abc123'");
+  it('opens the trace screen for a single trace id link', () => {
+    expect(routeForUrl('https://s.example.com/trace/abc123?spanId=x')).toBe('/trace/abc123');
+    expect(routeForUrl('https://s.example.com/trace/a%20b')).toBe('/trace/a%20b');
   });
 
   it('still opens the page when an explorer link has no usable query', () => {

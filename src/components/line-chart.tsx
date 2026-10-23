@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import Svg, { Line, Polyline } from 'react-native-svg';
+import { useMemo, useState } from 'react';
+import { PanResponder, StyleSheet, View } from 'react-native';
+import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
@@ -10,17 +10,30 @@ import type { Series } from '@/lib/signoz/types';
 interface LineChartProps {
   series: Series[];
   height?: number;
-  /** Formats the y-axis labels; defaults to a compact number. */
+  /** Formats the y-axis labels and the scrub readout; defaults to a compact number. */
   format?: (v: number) => string;
   /** Show a legend row for multi-series charts. */
   legend?: boolean;
 }
 
-const PADDING = 4;
+const PAD_TOP = 8;
+const PAD_BOTTOM = 4;
+const GUTTER = 46;
 
-export function LineChart({ series, height = 120, format = formatValue, legend }: LineChartProps) {
+function timeLabel(t: number, spanMs: number): string {
+  const d = new Date(t);
+  if (spanMs > 36 * 3_600_000) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+function readoutTime(t: number): string {
+  return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export function LineChart({ series, height = 140, format = formatValue, legend }: LineChartProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
+  const [cursor, setCursor] = useState<number | null>(null);
   const palette = [theme.accent, theme.info, theme.success, theme.warning, theme.danger];
 
   const points = series.flatMap((s) => s.points);
@@ -32,19 +45,59 @@ export function LineChart({ series, height = 120, format = formatValue, legend }
   const vSpan = vMax - vMin || 1;
   const tSpan = tMax - tMin || 1;
 
-  const x = (t: number) => PADDING + ((t - tMin) / tSpan) * Math.max(0, width - PADDING * 2);
-  const y = (v: number) => PADDING + (1 - (v - vMin) / vSpan) * (height - PADDING * 2);
+  const plotW = Math.max(0, width - GUTTER);
+  const plotH = height - PAD_TOP - PAD_BOTTOM;
+  const x = (t: number) => ((t - tMin) / tSpan) * plotW;
+  const y = (v: number) => PAD_TOP + (1 - (v - vMin) / vSpan) * plotH;
+  const gridValues = [vMax, vMin + vSpan / 2, vMin];
+
+  // Every distinct timestamp across series, so a scrub snaps to a real bucket.
+  const times = useMemo(() => [...new Set(series.flatMap((s) => s.points.map((p) => p.t)))].sort((a, b) => a - b), [series]);
+
+  // Rebuilt when the geometry changes, so its handlers always read the current layout.
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        // Claim only a horizontal drag or a tap, so vertical scrolling of the page still works.
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 3,
+        onPanResponderTerminationRequest: () => true,
+        onPanResponderGrant: (e) => setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })),
+        onPanResponderMove: (e) => setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })),
+        onPanResponderRelease: () => setCursor(null),
+        onPanResponderTerminate: () => setCursor(null),
+      }),
+    [plotW, tMin, tSpan, times],
+  );
+
+  const readout = cursor === null ? [] : series.flatMap((s, i) => {
+    const p = s.points.find((q) => q.t === cursor);
+    return p ? [{ name: s.name, v: p.v, color: palette[i % palette.length] }] : [];
+  });
 
   return (
     <View>
-      <View style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        <View style={styles.axis} pointerEvents="none">
-          <ThemedText type="caption">{hasData ? format(vMax) : ''}</ThemedText>
-          <ThemedText type="caption">{hasData ? format(vMin) : ''}</ThemedText>
-        </View>
+      <View style={styles.readout}>
+        {cursor !== null ? (
+          <>
+            <ThemedText type="caption">{readoutTime(cursor)}</ThemedText>
+            {readout.map((r, i) => (
+              <ThemedText key={`${r.name}-${i}`} type="small" style={[styles.readoutValue, { color: r.color }]}>
+                {series.length > 1 ? `${r.name}: ` : ''}
+                {format(r.v)}
+              </ThemedText>
+            ))}
+          </>
+        ) : (
+          <ThemedText type="caption">{hasData ? 'Touch the chart to read a value' : ' '}</ThemedText>
+        )}
+      </View>
+      <View style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
         {width > 0 ? (
-          <Svg width={width} height={height}>
-            <Line x1={0} x2={width} y1={y(vMin)} y2={y(vMin)} stroke={theme.border} strokeWidth={1} />
+          <Svg width={width} height={height} pointerEvents="none">
+            {gridValues.map((v, i) => (
+              <Line key={i} x1={0} x2={plotW} y1={y(v)} y2={y(v)} stroke={theme.border} strokeWidth={1} strokeDasharray={i === 2 ? undefined : '3,4'} />
+            ))}
             {series.map((s, i) =>
               s.points.length > 1 ? (
                 <Polyline
@@ -58,14 +111,37 @@ export function LineChart({ series, height = 120, format = formatValue, legend }
                 />
               ) : null,
             )}
+            {cursor !== null ? (
+              <>
+                <Line x1={x(cursor)} x2={x(cursor)} y1={PAD_TOP} y2={PAD_TOP + plotH} stroke={theme.textSecondary} strokeWidth={1} />
+                {series.map((s, i) => {
+                  const p = s.points.find((q) => q.t === cursor);
+                  return p ? <Circle key={`${s.name}-${i}`} cx={x(p.t)} cy={y(p.v)} r={4} fill={palette[i % palette.length]} stroke={theme.card} strokeWidth={2} /> : null;
+                })}
+              </>
+            ) : null}
           </Svg>
         ) : null}
+        <View style={[styles.axis, { width: GUTTER }]} pointerEvents="none">
+          {hasData ? gridValues.map((v, i) => (
+            <ThemedText key={i} type="caption" numberOfLines={1} style={[styles.axisLabel, { top: y(v) - 8 }]}>
+              {format(v)}
+            </ThemedText>
+          )) : null}
+        </View>
         {!hasData ? (
-          <View style={styles.noData}>
+          <View style={styles.noData} pointerEvents="none">
             <ThemedText type="caption">No data in this range</ThemedText>
           </View>
         ) : null}
       </View>
+      {hasData ? (
+        <View style={[styles.xAxis, { marginRight: GUTTER }]} pointerEvents="none">
+          <ThemedText type="caption">{timeLabel(tMin, tSpan)}</ThemedText>
+          <ThemedText type="caption">{timeLabel(tMin + tSpan / 2, tSpan)}</ThemedText>
+          <ThemedText type="caption">{timeLabel(tMax, tSpan)}</ThemedText>
+        </View>
+      ) : null}
       {legend && series.length > 1 ? (
         <View style={styles.legend}>
           {series.map((s, i) => (
@@ -80,8 +156,21 @@ export function LineChart({ series, height = 120, format = formatValue, legend }
   );
 }
 
+/** The bucket timestamp closest to a touch at `locationX`. */
+function nearestTime(locationX: number, g: { plotW: number; tMin: number; tSpan: number; times: number[] }): number | null {
+  if (g.times.length === 0 || g.plotW <= 0) return null;
+  const t = g.tMin + (Math.min(Math.max(locationX, 0), g.plotW) / g.plotW) * g.tSpan;
+  let best = g.times[0];
+  for (const c of g.times) if (Math.abs(c - t) < Math.abs(best - t)) best = c;
+  return best;
+}
+
 const styles = StyleSheet.create({
-  axis: { position: 'absolute', zIndex: 1, right: 0, top: 0, bottom: 0, justifyContent: 'space-between', alignItems: 'flex-end' },
+  readout: { minHeight: 22, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 2 },
+  readoutValue: { fontWeight: '700' },
+  axis: { position: 'absolute', right: 0, top: 0, bottom: 0 },
+  axisLabel: { position: 'absolute', right: 0, textAlign: 'right', width: GUTTER - 4 },
+  xAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   noData: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

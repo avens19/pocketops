@@ -1,13 +1,12 @@
 import * as Clipboard from 'expo-clipboard';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { firstUrl, routeForUrl } from '@/lib/deeplink';
-import { markLinkModalClosed } from '@/lib/link-modal';
 
 /** Link entry: takes a SigNoz web URL (or this app's own scheme) and opens the matching screen. */
 export default function OpenLinkScreen() {
@@ -15,8 +14,6 @@ export default function OpenLinkScreen() {
   const router = useRouter();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => markLinkModalClosed, []);
 
   async function paste() {
     const clip = await Clipboard.getStringAsync().catch(() => '');
@@ -36,7 +33,10 @@ export default function OpenLinkScreen() {
       return;
     }
     router.dismiss();
-    router.push(route as never);
+    // Logs and traces links apply their query once per navigation; a fresh `n` makes pasting the same link again restore it
+    // even after the user edited the filter.
+    const explorerLink = route.startsWith('/logs') || route.startsWith('/traces');
+    router.push((explorerLink ? `${route}${route.includes('?') ? '&' : '?'}n=${Date.now()}` : route) as never);
   }
 
   return (

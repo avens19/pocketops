@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { useTheme } from '@/hooks/use-theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { queryClient, setupFocusManager } from '@/lib/query';
 
@@ -28,6 +29,7 @@ export default function RootLayout() {
 
 function Navigator() {
   const { state } = useAuth();
+  const theme = useTheme();
 
   useEffect(() => {
     if (state.status !== 'loading') SplashScreen.hideAsync();
@@ -37,7 +39,15 @@ function Navigator() {
   const signedIn = state.status === 'signed-in';
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: theme.background },
+        headerTintColor: theme.accent,
+        headerTitleStyle: { color: theme.text },
+        contentStyle: { backgroundColor: theme.background },
+      }}>
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
@@ -45,7 +55,7 @@ function Navigator() {
           options={{ headerShown: true, presentation: 'modal', title: 'Open a SigNoz link' }}
         />
         <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />
-        <Stack.Screen name="traces" options={{ headerShown: true, title: 'Traces' }} />
+        <Stack.Screen name="trace/[id]" options={{ headerShown: true, title: 'Trace' }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="connect" />

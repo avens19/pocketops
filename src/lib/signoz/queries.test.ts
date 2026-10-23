@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { logFilterExpression, parseRawRows, parseScalarRows, parseTimeSeries, quote, stepSeconds } from './queries';
+import { logFilterExpression, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanListQuery, stepSeconds } from './queries';
 
 describe('quote', () => {
   it('escapes quotes and backslashes', () => {
@@ -17,8 +17,9 @@ describe('logFilterExpression', () => {
     );
   });
 
-  it('prefers a raw expression over text and wraps it', () => {
-    expect(logFilterExpression({ text: 'ignored', expression: "a = 1 OR b = 2" })).toBe('(a = 1 OR b = 2)');
+  it('wraps a raw expression and combines it with the search text', () => {
+    expect(logFilterExpression({ expression: 'a = 1 OR b = 2' })).toBe('(a = 1 OR b = 2)');
+    expect(logFilterExpression({ text: 'boom', expression: 'a = 1 OR b = 2' })).toBe("(a = 1 OR b = 2) AND body CONTAINS 'boom'");
   });
 
   it('is empty with no filters', () => {
@@ -101,5 +102,46 @@ describe('parseTimeSeries', () => {
       },
     );
     expect(series).toEqual([{ name: 'h1', labels: { 'host.name': 'h1' }, points: [{ t: 1, v: 2 }] }]);
+  });
+  it('returns points in time order even when the server does not', () => {
+    const series = parseTimeSeries({
+      data: { results: [{ aggregations: [{ series: [{ values: [{ timestamp: 30, value: 3 }, { timestamp: 10, value: 1 }, { timestamp: 20, value: 2 }] }] }] }] },
+    });
+    expect(series[0].points.map((p) => p.t)).toEqual([10, 20, 30]);
+  });
+  it('names aggregations by their own index, not their position in the response', () => {
+    const series = parseTimeSeries(
+      {
+        data: {
+          results: [
+            {
+              aggregations: [
+                { index: 1, alias: '__result_1', series: [{ values: [{ timestamp: 1, value: 2 }] }] },
+                { index: 0, alias: '__result_0', series: [{ values: [{ timestamp: 1, value: 42 }] }] },
+              ],
+            },
+          ],
+        },
+      },
+      ['calls', 'errors'],
+    );
+    expect(series.map((s) => [s.name, s.points[0].v])).toEqual([
+      ['errors', 2],
+      ['calls', 42],
+    ]);
+  });
+});
+
+describe('spanListQuery', () => {
+  const range = { startMs: 0, endMs: 1 };
+  const spec = (sort: 'latest' | 'slowest') => (spanListQuery(range, '', 50, 100, sort).compositeQuery.queries[0] as { spec: { order: { key: { name: string } }[]; offset: number } }).spec;
+
+  it('breaks ties on span_id in both orders so offset paging is stable', () => {
+    expect(spec('latest').order.map((o) => o.key.name)).toEqual(['timestamp', 'span_id']);
+    expect(spec('slowest').order.map((o) => o.key.name)).toEqual(['duration_nano', 'span_id']);
+  });
+
+  it('carries the offset', () => {
+    expect(spec('latest').offset).toBe(100);
   });
 });

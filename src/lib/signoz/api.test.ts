@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { SignozClient } from './client';
-import { listRules, normalizeRule, sortRules, toLogRow, toServiceStats } from './api';
+import waterfall from './fixtures/waterfall.json';
+import { fetchFieldKeys, fetchFieldValues, fetchRuleQuery, fetchTrace, listRules, normalizeRule, sortRules, toLogRow, toServiceStats } from './api';
 
 const creds = { endpoint: 'https://s.example.com', apiKey: 'k' };
 
@@ -98,5 +99,66 @@ describe('toServiceStats', () => {
       },
     });
     expect(stats).toEqual([{ name: 'api', calls: 100, errors: 5, p99Ms: 250 }]);
+  });
+});
+
+describe('fetchTrace', () => {
+  it('uses the waterfall endpoint and keeps attributes and events', async () => {
+    const { client, seen } = clientFor({ '/api/v4/traces/t1/waterfall': waterfall.data });
+    const trace = await fetchTrace(client, 't1');
+    expect(seen).toEqual(['/api/v4/traces/t1/waterfall']);
+    expect(trace.totalSpans).toBe(8);
+    expect(trace.spans[1].events[0].attributes['exception.type']).toBe('UpstreamTimeoutError');
+  });
+
+  it('falls back to a span query, building the tree itself, when the endpoint does not exist', async () => {
+    const rows = [
+      { timestamp: '2026-10-22T10:00:00.010Z', data: { span_id: 'b', parent_span_id: 'a', name: 'child', 'service.name': 'svc-b', duration_nano: 5_000_000, has_error: true, status_message: 'boom', kind_string: 'Client' } },
+      { timestamp: '2026-10-22T10:00:00.000Z', data: { span_id: 'a', parent_span_id: '', name: 'root', 'service.name': 'svc-a', duration_nano: 20_000_000, has_error: false, kind_string: 'Server' } },
+    ];
+    const { client, seen } = clientFor({ '/api/v5/query_range': { type: 'raw', data: { results: [{ rows }] } } });
+    const trace = await fetchTrace(client, 't2');
+    expect(seen).toEqual(['/api/v4/traces/t2/waterfall', '/api/v5/query_range']);
+    expect(trace.spans.map((x) => [x.name, x.level])).toEqual([['root', 0], ['child', 1]]);
+    expect(trace.errorSpans).toBe(1);
+    expect(trace.rootService).toBe('svc-a');
+  });
+
+  it('does not swallow auth errors by falling back', async () => {
+    const impl = (async () => new Response('{}', { status: 401 })) as unknown as typeof fetch;
+    await expect(fetchTrace(new SignozClient(creds, impl), 't3')).rejects.toMatchObject({ kind: 'auth' });
+  });
+});
+
+describe('fetchRuleQuery', () => {
+  const def = { condition: { compositeQuery: { queries: [{ type: 'builder_query', spec: { name: 'A', signal: 'logs', filter: { expression: "a = 'b'" } } }] } } };
+
+  it('reads v2 and falls back to v1', async () => {
+    const v2 = clientFor({ '/api/v2/rules/r1': def });
+    expect(await fetchRuleQuery(v2.client, 'r1')).toMatchObject({ signal: 'logs', expression: "a = 'b'" });
+    const v1 = clientFor({ '/api/v1/rules/r1': def });
+    expect(await fetchRuleQuery(v1.client, 'r1')).toMatchObject({ signal: 'logs' });
+    expect(v1.seen).toEqual(['/api/v2/rules/r1', '/api/v1/rules/r1']);
+  });
+});
+
+describe('field keys and values', () => {
+  const range = { startMs: 1, endMs: 2 };
+
+  it('flattens keys that appear in several contexts into one sorted list', async () => {
+    const { client } = clientFor({
+      '/api/v1/fields/keys': { keys: { 'service.name': [{ name: 'service.name', fieldContext: 'resource', fieldDataType: 'string' }, { name: 'service.name', fieldContext: 'attribute', fieldDataType: 'string' }], body: [{ name: 'body', fieldContext: 'log', fieldDataType: 'string' }] }, complete: true },
+    });
+    expect((await fetchFieldKeys(client, 'logs', '', range)).map((k) => k.name)).toEqual(['body', 'service.name']);
+  });
+
+  it('merges string, number and bool values and drops empties', async () => {
+    const { client } = clientFor({ '/api/v1/fields/values': { values: { stringValues: ['a', ''], numberValues: [502], boolValues: [true] }, complete: true } });
+    expect(await fetchFieldValues(client, 'traces', 'x', '', range)).toEqual(['a', '502', 'true']);
+  });
+
+  it('tolerates a response with no values', async () => {
+    const { client } = clientFor({ '/api/v1/fields/values': {} });
+    expect(await fetchFieldValues(client, 'traces', 'x', '', range)).toEqual([]);
   });
 });

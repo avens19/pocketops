@@ -53,9 +53,7 @@ export function routeForUrl(input: string): string | null {
       ...timeParams(params),
     });
   }
-  if (first === 'trace' && second) {
-    return withParams('/traces', { q: `trace_id = '${second.replace(/['\\]/g, '')}'`, ...timeParams(params) });
-  }
+  if (first === 'trace' && second) return `/trace/${encodeURIComponent(second)}`;
   if (first === 'metrics-explorer' || first === 'metrics') return '/metrics';
   return null;
 }
@@ -131,7 +129,7 @@ function literal(v: unknown): string {
 }
 
 /** Older links keep the filter as `filters.items` rather than an expression string. */
-function legacyExpression(filters: unknown): string {
+export function legacyExpression(filters: unknown): string {
   const items = (filters as { items?: unknown[]; op?: string } | undefined)?.items;
   if (!Array.isArray(items)) return '';
   const joiner = (filters as { op?: string }).op?.toUpperCase() === 'OR' ? ' OR ' : ' AND ';
