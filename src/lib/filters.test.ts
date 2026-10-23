@@ -55,6 +55,53 @@ describe('parseExpression', () => {
     expect(parseExpression('(a = 1) AND (b = 2)')).toEqual([eq('a', 1), eq('b', 2)]);
   });
 
+  it('reads clauses separated only by whitespace as AND, the way SigNoz writes them', () => {
+    expect(parseExpression("deployment.environment in ['production'] user.name = 'Cargurus'")).toEqual([
+      { kind: 'filter', key: 'deployment.environment', op: 'IN', values: ['production'] },
+      eq('user.name', 'Cargurus'),
+    ]);
+    expect(parseExpression("service.name = 'a' http.status_code >= 500 has_error = true http.route EXISTS body CONTAINS 'x'")).toEqual([
+      eq('service.name', 'a'),
+      { kind: 'filter', key: 'http.status_code', op: '>=', value: 500 },
+      eq('has_error', true),
+      { kind: 'filter', key: 'http.route', op: 'EXISTS' },
+      { kind: 'filter', key: 'body', op: 'CONTAINS', value: 'x' },
+    ]);
+  });
+
+  it('mixes implicit and explicit AND', () => {
+    expect(parseExpression("a = 1 b = 2 AND c IN (3, 4) d != 'x'")).toEqual([
+      eq('a', 1),
+      eq('b', 2),
+      { kind: 'filter', key: 'c', op: 'IN', values: [3, 4] },
+      ne('d', 'x'),
+    ]);
+  });
+
+  it('does not split inside quotes or lists that look like clauses', () => {
+    expect(parseExpression("body CONTAINS 'a = 1 b = 2' c = 3")).toEqual([
+      { kind: 'filter', key: 'body', op: 'CONTAINS', value: 'a = 1 b = 2' },
+      eq('c', 3),
+    ]);
+    expect(parseExpression("env IN ['x = 1', 'y z = 2'] k = 'v'")).toEqual([
+      { kind: 'filter', key: 'env', op: 'IN', values: ['x = 1', 'y z = 2'] },
+      eq('k', 'v'),
+    ]);
+  });
+
+  it('writes an implicit-AND expression back with explicit ANDs', () => {
+    expect(clausesToExpression(parseExpression("env in ['production'] user.name = 'Cargurus'"))).toBe(
+      "env IN ('production') AND user.name = 'Cargurus'",
+    );
+  });
+
+  it('leaves whitespace-separated text it cannot read cleanly as one raw clause', () => {
+    expect(parseExpression("a = 1 junk")).toEqual([{ kind: 'raw', text: 'a = 1 junk' }]);
+    expect(parseExpression("a = 1 NOT b = 2")).toEqual([{ kind: 'raw', text: 'a = 1 NOT b = 2' }]);
+    expect(parseExpression("a = 1 b = unquoted")).toEqual([{ kind: 'raw', text: 'a = 1 b = unquoted' }]);
+    expect(parseExpression("a = 1 b = 2 OR c = 3")).toEqual([{ kind: 'raw', text: 'a = 1 b = 2 OR c = 3' }]);
+  });
+
   it('keeps anything it cannot read as a raw clause', () => {
     expect(parseExpression("a = 1 OR b = 2")).toEqual([{ kind: 'raw', text: 'a = 1 OR b = 2' }]);
     expect(parseExpression("search('boom')")).toEqual([{ kind: 'raw', text: "search('boom')" }]);

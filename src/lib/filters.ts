@@ -150,13 +150,78 @@ export function isValidKey(key: string): boolean {
   return WHOLE_KEY.test(key);
 }
 
+/** The operator that starts `rest`, if any, matched the same way `parseClause` does. */
+function leadingOp(rest: string): FilterOp | undefined {
+  return OPS.find((o) => rest.toUpperCase().startsWith(o) && (/[a-z]/i.test(o) ? !/^\w/.test(rest.slice(o.length)) : true));
+}
+
+/** Index just past the quoted string or bracketed group that starts at `from`, or -1 when it never closes. */
+function skipEnclosed(s: string, from: number): number {
+  const open = s[from];
+  if (open === "'" || open === '"') {
+    for (let i = from + 1; i < s.length; i++) {
+      if (s[i] === '\\') i++;
+      else if (s[i] === open) return i + 1;
+    }
+    return -1;
+  }
+  const close = open === '(' ? ')' : ']';
+  let depth = 0;
+  for (let i = from; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "'" || ch === '"') {
+      const end = skipEnclosed(s, i);
+      if (end === -1) return -1;
+      i = end - 1;
+    } else if (ch === open) depth++;
+    else if (ch === close && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/** Index just past one complete `key op value` clause starting at `from`, or -1 when the text there is not one. */
+function scanClause(s: string, from: number): number {
+  const key = KEY.exec(s.slice(from));
+  if (!key) return -1;
+  let i = from + key[1].length;
+  while (/\s/.test(s[i] ?? '')) i++;
+  const op = leadingOp(s.slice(i));
+  if (!op) return -1;
+  i += op.length;
+  if (UNARY_OPS.includes(op)) return i;
+  while (/\s/.test(s[i] ?? '')) i++;
+  if (op === 'IN' || op === 'NOT IN') return s[i] === '(' || s[i] === '[' ? skipEnclosed(s, i) : -1;
+  if (s[i] === "'" || s[i] === '"') return skipEnclosed(s, i);
+  const bare = /^(-?\d+(\.\d+)?|true|false)(?![\w.])/i.exec(s.slice(i));
+  return bare ? i + bare[0].length : -1;
+}
+
+/**
+ * SigNoz reads clauses with no operator between them as AND, and its own query builder writes them that way
+ * (`env IN ['prod'] user.name = 'x'`). Splits such a run into its clauses. Text that is not a clean run of complete
+ * `key op value` clauses is returned whole, so it stays a raw clause rather than being cut in the wrong place.
+ */
+function splitImplicit(part: string): string[] {
+  const out: string[] = [];
+  let pos = 0;
+  for (;;) {
+    const end = scanClause(part, pos);
+    if (end === -1) return [part];
+    out.push(part.slice(pos, end).trim());
+    pos = end;
+    while (/\s/.test(part[pos] ?? '')) pos++;
+    if (pos >= part.length) break;
+  }
+  return out.length > 1 ? out : [part];
+}
+
 function parseClause(text: string): Clause {
   const raw: Clause = { kind: 'raw', text };
   const keyMatch = KEY.exec(text);
   if (!keyMatch) return raw;
   const key = keyMatch[1];
   const rest = text.slice(key.length).trimStart();
-  const op = OPS.find((o) => rest.toUpperCase().startsWith(o) && (/[a-z]/i.test(o) ? !/^\w/.test(rest.slice(o.length)) : true));
+  const op = leadingOp(rest);
   if (!op) return raw;
   const tail = rest.slice(op.length).trim();
 
@@ -220,7 +285,7 @@ export function parseExpression(expr: string): Clause[] {
       const inner = part.slice(1, -1).trim();
       return hasTopLevelOr(inner) ? [{ kind: 'raw', text: part }] : parseExpression(inner);
     }
-    return [parseClause(part)];
+    return splitImplicit(part).map(parseClause);
   });
 }
 
