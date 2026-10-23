@@ -15,22 +15,16 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 
 | Thing | State |
 |---|---|
-| tsc, `expo lint`, 55 unit tests | Pass (last run on the Windows box) |
-| `expo export` Metro bundle | Passed earlier in the project, not re-run after the latest changes |
-| Android debug build | **Never completed.** First blocked by the Windows 260-char path limit (react-native-reanimated CMake). Long paths were then enabled and prebuild succeeds, but the emulator would not start from `expo run:android`, so the Gradle build was never reached |
-| Running on any device or simulator | **Never done.** No screen has been seen running |
-| iOS | Never built (needs a Mac, which is the point of this handoff) |
-| Against a real SigNoz | **Never done.** Only the mock server, which is shaped from the SigNoz OpenAPI spec |
+| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (120 tests) |
+| Android debug build | Builds and runs (Gradle 9.4, SDK 37, NDK 27) |
+| Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
+| Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
+| iOS | Never built (needs a Mac) |
 | Release build / R8 / `eas update` / `eas build --local` | Not run |
 
-Treat every screen as untested UI. Expect layout and runtime bugs on first launch.
-
-## First steps on the Mac
-
-1. `npm install`, then `npx expo-doctor`, `npx tsc --noEmit`, `npx expo lint`, `npm test`.
-2. `node tools/mock-signoz/server.mjs 3301`, then `npx expo run:ios`. Connect to `http://localhost:3301`, key `test-key`.
-3. Walk every tab and each detail screen. Fix what is broken before adding features.
-4. Stand up a real SigNoz (see below) and connect to it. This is where API-shape mistakes will show up.
+Bugs the first real device run found, all fixed: `/` had no route (cold start landed on "Unmatched Route"; a naive redirect then
+looped with the auth guard), the web build's unbound `fetch`, time-series buckets returned out of order, aggregations returned in
+arbitrary order (calls/errors/p99 were swapped on the service chart), the connect button hidden behind the keyboard.
 
 ## SigNoz API notes
 
@@ -80,31 +74,35 @@ Treat every screen as untested UI. Expect layout and runtime bugs on first launc
   treating this as open source in any real sense.
 - `npm audit` reports 20 high-severity advisories that were never reviewed.
 
+## What exists now (beyond the first handoff)
+
+- **Filtering**: `lib/filters.ts` parses and writes SigNoz filter expressions as chips (AND-joined clauses; anything else is kept
+  verbatim as a raw clause). `lib/explorer-state.ts` holds one filter per explorer (logs, traces) outside the screens, so a detail
+  screen can add a filter and the list it returns to already shows it. Route params (links, "view logs for this alert") are applied
+  once per navigation through `lib/explore-links.ts`. `FilterBar` / `FilterEditor` autocomplete keys and values from
+  `/api/v1/fields/keys|values`.
+- **Attributes everywhere are tappable** (`AttributeList`): show only / hide / the other signal / copy.
+- **Traces tab** (replaced the Open tab; Open link is a header button): root spans by default, Errors / Slowest toggles, paging.
+- **Trace screen** (`app/trace/[id].tsx`): waterfall from `POST /api/v4/traces/{id}/waterfall` (falls back to a span query),
+  collapsible subtrees, "Jump to failure", inline span detail with exception events.
+- **Alerts**: firing instances link to the logs/traces behind them, filtered by the rule's query plus the instance's labels.
+- **Charts**: axis, gridlines, time labels, touch-scrub readout.
+
 ## Known gaps and good next work
 
-Roughly in priority order, tied to the owner's goal:
-
-1. **Make the existing screens actually work on a device** (see First steps).
-2. **Attribute-driven filtering.** On a log or span detail screen, every attribute/resource row should offer "add to
-   filter" (and "exclude"), writing into the same filter expression the Logs and Traces screens use. Show active filters
-   as removable chips instead of one raw text box, with a raw-expression editor as the escape hatch. Autocomplete keys
-   and values from SigNoz's field-key/value endpoints.
-3. **Span and trace drill-down.** There is no trace detail yet: build a waterfall (parent/child spans, durations, errors),
-   a span detail sheet with attributes, and jump between a span and its logs via `trace_id`. Today the Traces screen is a
-   flat list with grouped counts.
-4. **Logs ergonomics.** Tap an attribute in a log to filter; severity and service quick filters; live tail option; copy a
-   log or a deep link to it.
-5. **Traces explorer features**: ordering and column choice, aggregation choice (count, p99, error rate) for the grouped
-   view, trace operator support if the API allows.
-6. **Metrics**: label group-by, aggregation picker, better metric search.
-7. **Alerts**: the rule detail only shows the timeline; consider the underlying query and a link to related logs/traces.
-8. Remembered links: a link tapped while signed out is lost. Dashboards are not covered at all.
-9. Then iOS and Android release builds, `eas update` to a channel, and store-listing checks.
+1. iOS build and a pass on a real device (Android emulator is not a phone: gestures, fonts, notch).
+2. Test against a production-sized SigNoz (34+ services, millions of spans): paging, autocomplete latency, waterfall size.
+3. Live tail for logs; copy a log or a deep link to it; group-by for the traces list.
+4. Metrics: aggregation picker, label filters, better search.
+5. Dashboards are not covered at all. A link tapped while signed out is lost.
+6. Trace operators (`B → A`) cannot run.
+7. Then release builds, `eas update` to a channel, and store-listing checks.
 
 ## Environment gotchas learned
 
 - Windows only: the 260-char path limit breaks the reanimated native build. Enable `LongPathsEnabled`, or build from a short
   path. `subst` does not help because Node resolves the real path. Not an issue on macOS.
-- Android emulator on the Windows box would only boot **headless**: `emulator -avd <name> -no-window -no-audio -gpu
-  swiftshader_indirect`. Letting `expo run:android` start it timed out.
+- Android emulator headless: `emulator -avd <name> -no-window -no-audio -gpu swiftshader_indirect`. It needs KVM on Linux
+  (`/dev/kvm` and your user in the `kvm` group). Drive it with `adb`: `uiautomator dump` lists on-screen text and accessibility
+  labels, which is far more reliable than tapping coordinates. Give interactive controls an `accessibilityLabel`.
 - The AGENTS.md scaffold text suggests cloud EAS builds; this project overrides that to local-only. Keep it that way.
