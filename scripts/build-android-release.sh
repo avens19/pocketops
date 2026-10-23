@@ -3,8 +3,8 @@
 #
 #   scripts/build-android-release.sh [aab|apk] [abis]
 #
-#   aab   (default) Play Store bundle, all four ABIs (Play splits per device). Output: dist/pocketops-<version>-<code>.aab
-#   apk   sideloadable APK; abis default to arm64-v8a,x86_64 (a device and an emulator). Output: dist/pocketops-<version>-<abis>.apk
+#   aab   (default) Play Store bundle, all four ABIs (Play splits per device). Output: builds/pocketops-<version>-<code>.aab
+#   apk   sideloadable APK; abis default to arm64-v8a,x86_64 (a device and an emulator). Output: builds/pocketops-<version>-<abis>.apk
 #
 # Signing comes from ~/.pocketops/signing.env (STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD), never from the repo. Create the
 # keystore once with keytool and keep a backup: an APK signed with a different key cannot update this one, only replace it after an
@@ -34,12 +34,13 @@ CODE=$(node -p "require('./app.json').expo.android.versionCode ?? 1")
     -Pandroid.injected.signing.key.alias="$KEY_ALIAS" \
     -Pandroid.injected.signing.key.password="$KEY_PASSWORD" )
 
-mkdir -p dist
+# Not dist/: `expo export` (and so `eas update`) empties dist/ and would delete the release artifacts.
+mkdir -p builds
 if [ "$KIND" = aab ]; then
-  OUT="dist/pocketops-$VERSION-$CODE.aab"
+  OUT="builds/pocketops-$VERSION-$CODE.aab"
   cp android/app/build/outputs/bundle/release/app-release.aab "$OUT"
 else
-  OUT="dist/pocketops-$VERSION-${ABIS//,/+}.apk"
+  OUT="builds/pocketops-$VERSION-${ABIS//,/+}.apk"
   cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
 fi
 echo "Built $OUT"

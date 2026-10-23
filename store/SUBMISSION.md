@@ -33,7 +33,7 @@ Both stores are submitted for review. When either listing goes live its link on 
 
 ## Google Play
 
-Artifact: `dist/pocketops-1.0.0-1.aab` (`scripts/build-android-release.sh aab`), signed with the upload key in
+Artifact: `builds/pocketops-1.0.0-1.aab` (`scripts/build-android-release.sh aab`), signed with the upload key in
 `~/.pocketops/release.keystore`. **Back that keystore up**: Play App Signing holds the app-signing key, but you can only reset a lost
 upload key through support.
 
@@ -89,10 +89,10 @@ npx expo prebuild --platform ios --clean
 # Archive unsigned: signing at archive time wants a development profile, which needs a registered device.
 # The export step signs for distribution and needs no device.
 xcodebuild -workspace ios/PocketOps.xcworkspace -scheme PocketOps -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath dist/PocketOps.xcarchive CODE_SIGNING_ALLOWED=NO archive
-xcodebuild -exportArchive -archivePath dist/PocketOps.xcarchive -exportPath dist/ipa \
+  -destination 'generic/platform=iOS' -archivePath builds/PocketOps.xcarchive CODE_SIGNING_ALLOWED=NO archive
+xcodebuild -exportArchive -archivePath builds/PocketOps.xcarchive -exportPath builds/ipa \
   -exportOptionsPlist store/ExportOptions.plist -allowProvisioningUpdates
-xcrun altool --upload-app -f dist/ipa/PocketOps.ipa -t ios --apiKey <key id> --apiIssuer <issuer id>
+xcrun altool --upload-app -f builds/ipa/PocketOps.ipa -t ios --apiKey <key id> --apiIssuer <issuer id>
 ```
 
 ## Before you publish
