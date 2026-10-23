@@ -8,6 +8,7 @@ import {
   errorSpansQuery,
   logsQuery,
   metricSeriesQuery,
+  type MetricGroup,
   parseRawRows,
   parseScalarRows,
   parseTimeSeries,
@@ -402,16 +403,12 @@ export async function fetchMetricSeries(
   client: SignozClient,
   range: TimeRange,
   metric: { name: string; type: MetricKind; isMonotonic?: boolean },
-  groupBy: string | undefined,
+  options: { groupBy?: MetricGroup; aggregation?: string },
   signal?: AbortSignal,
 ) {
   const run = async (name: string) =>
     parseTimeSeries(
-      await queryRange(
-        client,
-        metricSeriesQuery(range, name, metric.type, { monotonic: metric.isMonotonic, groupBy }),
-        signal,
-      ),
+      await queryRange(client, metricSeriesQuery(range, name, metric.type, { monotonic: metric.isMonotonic, ...options }), signal),
     );
   const series = await run(metric.name);
   // Histograms are queried through their `.bucket` series; the list endpoint reports the base name.
@@ -422,9 +419,25 @@ export async function fetchMetricSeries(
   return series;
 }
 
+/** The labels a metric actually carries, to offer as ways to split it. Common ones first. */
+export async function fetchMetricLabels(
+  client: SignozClient,
+  metricName: string,
+  range: TimeRange,
+  signal?: AbortSignal,
+): Promise<MetricGroup[]> {
+  const keys = await fetchFieldKeys(client, 'metrics', '', range, signal, metricName);
+  const common = ['service.name', 'host.name', 'k8s.pod.name', 'k8s.namespace.name'];
+  const rank = (name: string) => {
+    const i = common.indexOf(name);
+    return i === -1 ? common.length : i;
+  };
+  return keys.map((k) => ({ name: k.name, context: k.context })).sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name));
+}
+
 // ---- fields (filter autocomplete) -----------------------------------------------------------
 
-export type FieldSignal = 'logs' | 'traces';
+export type FieldSignal = 'logs' | 'traces' | 'metrics';
 
 export interface FieldKey {
   name: string;
@@ -440,9 +453,11 @@ export async function fetchFieldKeys(
   search: string,
   range: TimeRange,
   abort?: AbortSignal,
+  /** For signal=metrics: the labels of this one metric. */
+  metricName?: string,
 ): Promise<FieldKey[]> {
   const data = await client.request<{ keys?: Record<string, Json[]> | null }>('/api/v1/fields/keys', {
-    query: { signal, searchText: search || undefined, limit: 40, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
+    query: { signal, metricName, searchText: search || undefined, limit: 40, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
     signal: abort,
   });
   const seen = new Set<string>();

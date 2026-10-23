@@ -15,7 +15,7 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 
 | Thing | State |
 |---|---|
-| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (131 tests) |
+| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (139 tests) |
 | Android debug build | Builds and runs (Gradle 9.4, SDK 37, NDK 27) |
 | Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
 | Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
@@ -97,7 +97,7 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
 1. iOS build and a pass on a real device (Android emulator is not a phone: gestures, fonts, notch).
 2. Test against a production-sized SigNoz (34+ services, millions of spans): paging, autocomplete latency, waterfall size.
 3. A deep link to a log; group-by across more than one field in the UI (links already carry several).
-4. Metrics: aggregation picker, label filters, better search.
+4. Metrics: label filters and better search (aggregation choices, real label splits and unit formatting exist).
 5. Dashboards are not covered at all. A link tapped while signed out is lost.
 6. Trace operators (`B → A`) cannot run.
 7. Then release builds, `eas update` to a channel, and store-listing checks.

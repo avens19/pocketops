@@ -56,3 +56,41 @@ export function formatTime(input: string | number): string {
     second: '2-digit',
   });
 }
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
+
+/**
+ * A metric value in its own unit. SigNoz reports UCUM-ish units: `By` bytes, `ms`/`s`/`ns`/`us`, `%`, and `1` for a plain ratio or count.
+ * Unknown units fall back to a compact number.
+ */
+export function formatUnit(value: number, unit: string | undefined): string {
+  if (!Number.isFinite(value)) return '–';
+  switch ((unit ?? '').trim()) {
+    case 'By':
+    case 'bytes': {
+      let v = Math.abs(value);
+      let i = 0;
+      while (v >= 1024 && i < BYTE_UNITS.length - 1) {
+        v /= 1024;
+        i++;
+      }
+      const text = i === 0 ? String(Math.round(v)) : v.toFixed(v >= 100 ? 0 : v >= 10 ? 1 : 2);
+      return `${value < 0 ? '-' : ''}${text} ${BYTE_UNITS[i]}`;
+    }
+    case 'By/s':
+      return `${formatUnit(value, 'By')}/s`;
+    case 'ns':
+      return formatDuration(value / 1e6);
+    case 'us':
+    case 'µs':
+      return formatDuration(value / 1e3);
+    case 'ms':
+      return formatDuration(value);
+    case 's':
+      return formatDuration(value * 1000);
+    case '%':
+      return `${formatValue(value)}%`;
+    default:
+      return formatValue(value);
+  }
+}

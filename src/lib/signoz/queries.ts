@@ -274,22 +274,58 @@ export function traceSpansQuery(range: TimeRange, traceId: string, limit: number
 
 export type MetricKind = 'gauge' | 'sum' | 'histogram' | 'summary' | 'exponentialhistogram' | string;
 
+/** One way to aggregate a metric: SigNoz's time aggregation (per series, per step) then space aggregation (across series). */
+export interface MetricAggregation {
+  key: string;
+  label: string;
+  time?: string;
+  space: string;
+}
+
+const isHistogram = (kind: MetricKind) => kind === 'histogram' || kind === 'exponentialhistogram';
+
+/** What can sensibly be asked of a metric of this type, first entry being the default. */
+export function metricAggregations(kind: MetricKind, monotonic?: boolean): MetricAggregation[] {
+  if (isHistogram(kind)) {
+    return ['p99', 'p95', 'p90', 'p50'].map((p) => ({ key: p, label: p, space: p }));
+  }
+  if (kind === 'sum' && monotonic !== false) {
+    return [
+      { key: 'rate', label: 'Rate', time: 'rate', space: 'sum' },
+      { key: 'increase', label: 'Increase', time: 'increase', space: 'sum' },
+    ];
+  }
+  if (kind === 'sum') {
+    return [
+      { key: 'avg', label: 'Avg', time: 'avg', space: 'sum' },
+      { key: 'max', label: 'Max', time: 'max', space: 'sum' },
+      { key: 'latest', label: 'Latest', time: 'latest', space: 'sum' },
+    ];
+  }
+  return [
+    { key: 'latest', label: 'Latest', time: 'latest', space: 'avg' },
+    { key: 'avg', label: 'Avg', time: 'avg', space: 'avg' },
+    { key: 'max', label: 'Max', time: 'max', space: 'max' },
+    { key: 'min', label: 'Min', time: 'min', space: 'min' },
+  ];
+}
+
+/** A label to split a metric by, with the context SigNoz needs to find it (resource or attribute). */
+export interface MetricGroup {
+  name: string;
+  context: string;
+}
+
 export function metricSeriesQuery(
   range: TimeRange,
   metricName: string,
   kind: MetricKind,
-  options: { monotonic?: boolean; groupBy?: string } = {},
+  options: { monotonic?: boolean; groupBy?: MetricGroup; aggregation?: string } = {},
 ) {
-  let aggregation: Record<string, string>;
-  if (kind === 'histogram' || kind === 'exponentialhistogram') {
-    aggregation = { metricName, spaceAggregation: 'p99' };
-  } else if (kind === 'sum' && options.monotonic !== false) {
-    aggregation = { metricName, timeAggregation: 'rate', spaceAggregation: 'sum' };
-  } else if (kind === 'sum') {
-    aggregation = { metricName, timeAggregation: 'avg', spaceAggregation: 'sum' };
-  } else {
-    aggregation = { metricName, timeAggregation: 'latest', spaceAggregation: 'avg' };
-  }
+  const choices = metricAggregations(kind, options.monotonic);
+  const chosen = choices.find((c) => c.key === options.aggregation) ?? choices[0];
+  const aggregation: Record<string, string> = { metricName, spaceAggregation: chosen.space };
+  if (chosen.time) aggregation.timeAggregation = chosen.time;
   return body(range, 'time_series', [
     {
       type: 'builder_query',
@@ -298,7 +334,7 @@ export function metricSeriesQuery(
         signal: 'metrics',
         stepInterval: stepSeconds(range),
         aggregations: [aggregation],
-        ...(options.groupBy ? { groupBy: [{ name: options.groupBy, fieldContext: 'resource' }] } : {}),
+        ...(options.groupBy ? { groupBy: [{ name: options.groupBy.name, fieldContext: options.groupBy.context || 'resource' }] } : {}),
         limit: 10,
       },
     },

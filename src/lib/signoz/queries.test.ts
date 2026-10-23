@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { logFilterExpression, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanGroupsQuery, spanListQuery, stepSeconds } from './queries';
+import { logFilterExpression, metricAggregations, metricSeriesQuery, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanGroupsQuery, spanListQuery, stepSeconds } from './queries';
 
 describe('quote', () => {
   it('escapes quotes and backslashes', () => {
@@ -154,5 +154,34 @@ describe('spanGroupsQuery', () => {
     expect(spec.aggregations.map((a) => a.alias)).toEqual(['count', 'errors', 'p99']);
     expect(spec.groupBy).toEqual([{ name: 'http.route' }]);
     expect(spec.order).toEqual([{ key: { name: 'count' }, direction: 'desc' }]);
+  });
+});
+
+describe('metric aggregations', () => {
+  const agg = (kind: string, options = {}) =>
+    (metricSeriesQuery({ startMs: 0, endMs: 1 }, 'm', kind, options).compositeQuery.queries[0] as { spec: { aggregations: Record<string, string>[]; groupBy?: Record<string, string>[] } }).spec;
+
+  it('offers choices that fit the metric type, default first', () => {
+    expect(metricAggregations('sum', true).map((a) => a.key)).toEqual(['rate', 'increase']);
+    expect(metricAggregations('sum', false).map((a) => a.key)).toEqual(['avg', 'max', 'latest']);
+    expect(metricAggregations('gauge').map((a) => a.key)).toEqual(['latest', 'avg', 'max', 'min']);
+    expect(metricAggregations('histogram').map((a) => a.key)).toEqual(['p99', 'p95', 'p90', 'p50']);
+  });
+
+  it('keeps the previous default behaviour per type', () => {
+    expect(agg('gauge').aggregations[0]).toEqual({ metricName: 'm', timeAggregation: 'latest', spaceAggregation: 'avg' });
+    expect(agg('sum', { monotonic: true }).aggregations[0]).toEqual({ metricName: 'm', timeAggregation: 'rate', spaceAggregation: 'sum' });
+    expect(agg('histogram').aggregations[0]).toEqual({ metricName: 'm', spaceAggregation: 'p99' });
+  });
+
+  it('applies a chosen aggregation, ignoring one that does not fit the type', () => {
+    expect(agg('gauge', { aggregation: 'max' }).aggregations[0]).toMatchObject({ timeAggregation: 'max', spaceAggregation: 'max' });
+    expect(agg('histogram', { aggregation: 'p50' }).aggregations[0]).toEqual({ metricName: 'm', spaceAggregation: 'p50' });
+    expect(agg('sum', { monotonic: true, aggregation: 'max' }).aggregations[0]).toMatchObject({ timeAggregation: 'rate' });
+  });
+
+  it('groups by a label in the context it lives in', () => {
+    expect(agg('gauge', { groupBy: { name: 'http.response.status_class', context: 'attribute' } }).groupBy).toEqual([{ name: 'http.response.status_class', fieldContext: 'attribute' }]);
+    expect(agg('gauge', { groupBy: { name: 'service.name', context: '' } }).groupBy).toEqual([{ name: 'service.name', fieldContext: 'resource' }]);
   });
 });

@@ -11,16 +11,16 @@ import { RangePicker } from '@/components/range-picker';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useClient } from '@/lib/auth';
-import { fetchMetricSeries, listMetrics } from '@/lib/signoz/api';
-import { rangeFor, type RangeKey } from '@/lib/signoz/queries';
-
-const GROUPS = ['service.name', 'host.name', 'k8s.pod.name'];
+import { formatUnit } from '@/lib/format';
+import { fetchMetricLabels, fetchMetricSeries, listMetrics } from '@/lib/signoz/api';
+import { metricAggregations, rangeFor, type MetricGroup, type RangeKey } from '@/lib/signoz/queries';
 
 export default function MetricDetailScreen() {
   const params = useLocalSearchParams<{ name: string; type?: string; monotonic?: string; unit?: string }>();
   const client = useClient();
   const [rangeKey, setRangeKey] = useState<RangeKey>('1h');
-  const [groupBy, setGroupBy] = useState<string | undefined>();
+  const [groupBy, setGroupBy] = useState<MetricGroup | undefined>();
+  const [aggregation, setAggregation] = useState<string | undefined>();
 
   // Arriving by link carries only the name; look the type up so we know how to aggregate it.
   const info = useQuery({
@@ -36,12 +36,25 @@ export default function MetricDetailScreen() {
   const monotonic = params.monotonic ? params.monotonic === '1' : info.data?.isMonotonic;
   const unit = params.unit ?? info.data?.unit;
 
+  // The labels this metric really carries, not a fixed guess: a counter may be split by status class, a gauge by pod.
+  const labels = useQuery({
+    queryKey: ['metric-labels', client.endpoint, params.name],
+    queryFn: ({ signal }) => fetchMetricLabels(client, params.name, rangeFor('24h'), signal),
+    staleTime: 5 * 60_000,
+  });
+
+  const choices = type ? metricAggregations(type, monotonic) : [];
+  const activeAggregation = choices.find((c) => c.key === aggregation) ?? choices[0];
+
   const series = useQuery({
-    queryKey: ['metric-series', client.endpoint, params.name, type, rangeKey, groupBy],
+    queryKey: ['metric-series', client.endpoint, params.name, type, rangeKey, groupBy, activeAggregation?.key],
     enabled: !!type,
     queryFn: ({ signal }) =>
-      fetchMetricSeries(client, rangeFor(rangeKey), { name: params.name, type: type!, isMonotonic: monotonic }, groupBy, signal),
+      fetchMetricSeries(client, rangeFor(rangeKey), { name: params.name, type: type!, isMonotonic: monotonic }, { groupBy, aggregation: activeAggregation?.key }, signal),
   });
+
+  // A rate is per second; everything else is in the metric's own unit.
+  const format = (v: number) => formatUnit(v, unit) + (activeAggregation?.key === 'rate' ? '/s' : '');
 
   return (
     <ScrollView
@@ -62,11 +75,29 @@ export default function MetricDetailScreen() {
 
       <RangePicker value={rangeKey} onChange={setRangeKey} />
 
-      <View style={styles.chips}>
-        <Chip label="No grouping" selected={!groupBy} onPress={() => setGroupBy(undefined)} />
-        {GROUPS.map((g) => (
-          <Chip key={g} label={g} selected={groupBy === g} onPress={() => setGroupBy(g)} />
-        ))}
+      {choices.length > 1 ? (
+        <View style={styles.row}>
+          <ThemedText type="caption" style={styles.rowLabel}>
+            Show
+          </ThemedText>
+          <View style={styles.chips}>
+            {choices.map((c) => (
+              <Chip key={c.key} label={c.label} selected={activeAggregation?.key === c.key} onPress={() => setAggregation(c.key)} />
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      <View style={styles.row}>
+        <ThemedText type="caption" style={styles.rowLabel}>
+          Split by
+        </ThemedText>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip label="Nothing" selected={!groupBy} onPress={() => setGroupBy(undefined)} />
+          {(labels.data ?? []).map((g) => (
+            <Chip key={g.name} label={g.name} selected={groupBy?.name === g.name} onPress={() => setGroupBy(g)} />
+          ))}
+        </ScrollView>
       </View>
 
       <Card>
@@ -77,7 +108,7 @@ export default function MetricDetailScreen() {
         ) : series.isError ? (
           <ErrorState error={series.error} onRetry={() => series.refetch()} />
         ) : (
-          <LineChart series={series.data ?? []} height={180} legend />
+          <LineChart series={series.data ?? []} height={180} legend format={format} />
         )}
       </Card>
     </ScrollView>
@@ -87,5 +118,7 @@ export default function MetricDetailScreen() {
 const styles = StyleSheet.create({
   content: { padding: Spacing.three, gap: Spacing.three },
   meta: { gap: 2 },
+  row: { gap: 4 },
+  rowLabel: { fontWeight: '700', letterSpacing: 0.6, textTransform: 'uppercase' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
 });
