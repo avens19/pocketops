@@ -15,7 +15,7 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 
 | Thing | State |
 |---|---|
-| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (126 tests) |
+| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (131 tests) |
 | Android debug build | Builds and runs (Gradle 9.4, SDK 37, NDK 27) |
 | Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
 | Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
@@ -87,6 +87,7 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
   collapsible subtrees, "Jump to failure", inline span detail with exception events.
 - **Alerts**: firing instances link to the logs/traces behind them, filtered by the rule's query plus the instance's labels.
 - **Charts**: axis, gridlines, time labels, touch-scrub readout.
+- **Group by** on Traces: spans, errors and p99 per value of a field; tap a row to drill into those spans.
 - **Live tail** on Logs (refreshes every 3s while at the top of the list) and **Copy as JSON** on a log.
 - **Connection banner** (`lib/connection*.ts`, `ConnectionBanner`): screens keep their last data when a refresh fails, which looks
   healthy; a global banner says when requests are failing (unreachable / server error / key rejected) and how old the data is.
@@ -95,7 +96,7 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
 
 1. iOS build and a pass on a real device (Android emulator is not a phone: gestures, fonts, notch).
 2. Test against a production-sized SigNoz (34+ services, millions of spans): paging, autocomplete latency, waterfall size.
-3. Group-by for the traces list; a deep link to a log.
+3. A deep link to a log; group-by across more than one field in the UI (links already carry several).
 4. Metrics: aggregation picker, label filters, better search.
 5. Dashboards are not covered at all. A link tapped while signed out is lost.
 6. Trace operators (`B → A`) cannot run.

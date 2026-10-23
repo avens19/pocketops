@@ -206,7 +206,7 @@ export function errorSpansQuery(range: TimeRange, service: string) {
   ]);
 }
 
-/** Counts of spans matching an explorer filter, grouped by the given attributes. */
+/** Per-group span count, error count and p99 for an explorer filter, grouped by the given attributes, biggest first. */
 export function spanGroupsQuery(range: TimeRange, expression: string, groupBy: string[]) {
   return body(range, 'scalar', [
     {
@@ -215,7 +215,11 @@ export function spanGroupsQuery(range: TimeRange, expression: string, groupBy: s
         name: 'A',
         signal: 'traces',
         filter: { expression },
-        aggregations: [{ expression: 'count()', alias: 'count' }],
+        aggregations: [
+          { expression: 'count()', alias: 'count' },
+          { expression: 'countIf(has_error = true)', alias: 'errors' },
+          { expression: 'p99(duration_nano)', alias: 'p99' },
+        ],
         groupBy: groupBy.map((name) => ({ name })),
         order: [{ key: { name: 'count' }, direction: 'desc' }],
         limit: 50,

@@ -200,6 +200,50 @@ function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorP
   );
 }
 
+/** Picks one field to group by, with the same suggestions as the filter editor. */
+export function GroupByEditor(props: { visible: boolean; signal: ExplorerSignal; range: TimeRange; onClose: () => void; onSubmit: (keys: string[]) => void }) {
+  return props.visible ? <GroupByForm {...props} /> : null;
+}
+
+function GroupByForm({ signal, range, onClose, onSubmit }: { signal: ExplorerSignal; range: TimeRange; onClose: () => void; onSubmit: (keys: string[]) => void }) {
+  const client = useClient();
+  const theme = useTheme();
+  const [key, setKey] = useState('');
+  const debouncedKey = useDebounced(key);
+  const windowKey = Math.floor(range.startMs / 60_000);
+  const keys = useQuery({
+    queryKey: ['field-keys', client.endpoint, signal, debouncedKey, windowKey],
+    queryFn: ({ signal: abort }) => fetchFieldKeys(client, signal, debouncedKey, range, abort),
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+  });
+  const ok = isValidKey(key.trim());
+  return (
+    <Sheet visible title="Group by" onClose={onClose} onApply={() => onSubmit([key.trim()])} canApply={ok}>
+      <Field label="Field" value={key} onChangeText={setKey} placeholder="http.route" autoFocus />
+      {key.trim() && !ok ? (
+        <ThemedText type="caption" color="danger">
+          A field name has letters, digits and . _ - : only.
+        </ThemedText>
+      ) : null}
+      <View style={[styles.suggestions, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        {(keys.data ?? []).slice(0, 14).map((k, i) => (
+          <Pressable
+            key={k.name}
+            accessibilityRole="button"
+            onPress={() => onSubmit([k.name])}
+            style={[styles.suggestion, i > 0 ? { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth } : null]}>
+            <ThemedText type="small" style={styles.flex} numberOfLines={1}>
+              {k.name}
+            </ThemedText>
+            <ThemedText type="caption">{[k.context, k.dataType].filter(Boolean).join(' · ')}</ThemedText>
+          </Pressable>
+        ))}
+      </View>
+    </Sheet>
+  );
+}
+
 /** The whole filter as text, for expressions the chips cannot build (OR, parentheses, functions). */
 export function QueryEditor(props: { visible: boolean; signal: ExplorerSignal; onClose: () => void; onSubmit: (expression: string) => void }) {
   return props.visible ? <QueryForm {...props} /> : null;

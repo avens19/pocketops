@@ -18,9 +18,11 @@ export interface ExplorerState {
   rootOnly: boolean;
   /** Traces only: keep spans with an error. */
   errorsOnly: boolean;
+  /** Traces only: show counts per value of these fields instead of the span list. */
+  groupBy: string[];
 }
 
-const EMPTY: ExplorerState = { clauses: [], text: '', sig: '', rootOnly: true, errorsOnly: false };
+const EMPTY: ExplorerState = { clauses: [], text: '', sig: '', rootOnly: true, errorsOnly: false, groupBy: [] };
 
 const states: Record<ExplorerSignal, ExplorerState> = { logs: EMPTY, traces: EMPTY };
 const listeners = new Set<() => void>();
@@ -50,10 +52,12 @@ export const explorer = {
    */
   investigate: (signal: ExplorerSignal, clause: Clause) => {
     const s = states[signal];
-    set(signal, { ...s, clauses: addClause(s.clauses, clause), rootOnly: signal === 'traces' ? false : s.rootOnly });
+    // Drilling into a group leaves group-by, so the matching spans are what you see next.
+    set(signal, { ...s, clauses: addClause(s.clauses, clause), rootOnly: signal === 'traces' ? false : s.rootOnly, groupBy: [] });
   },
   setRootOnly: (signal: ExplorerSignal, rootOnly: boolean) => set(signal, { ...states[signal], rootOnly }),
   setErrorsOnly: (signal: ExplorerSignal, errorsOnly: boolean) => set(signal, { ...states[signal], errorsOnly }),
+  setGroupBy: (signal: ExplorerSignal, groupBy: string[]) => set(signal, { ...states[signal], groupBy }),
   remove: (signal: ExplorerSignal, index: number) => {
     const s = states[signal];
     set(signal, { ...s, clauses: removeClause(s.clauses, index) });
@@ -70,7 +74,7 @@ export const explorer = {
   setExpression: (signal: ExplorerSignal, expression: string, text = '', sig?: string) => {
     const s = states[signal];
     // A query that arrives from elsewhere (a link, an alert, a service) is about specific spans: show them all, not just roots.
-    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false });
+    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
   },
   clear: (signal: ExplorerSignal) => set(signal, { ...states[signal], clauses: [], text: '' }),
   expression: (signal: ExplorerSignal) => clausesToExpression(states[signal].clauses),

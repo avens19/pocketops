@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { logFilterExpression, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanListQuery, stepSeconds } from './queries';
+import { logFilterExpression, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanGroupsQuery, spanListQuery, stepSeconds } from './queries';
 
 describe('quote', () => {
   it('escapes quotes and backslashes', () => {
@@ -143,5 +143,16 @@ describe('spanListQuery', () => {
 
   it('carries the offset', () => {
     expect(spec('latest').offset).toBe(100);
+  });
+});
+
+describe('spanGroupsQuery', () => {
+  it('asks for count, errors and p99 per group, biggest first', () => {
+    const spec = (spanGroupsQuery({ startMs: 0, endMs: 1 }, 'isRoot = true', ['http.route']).compositeQuery.queries[0] as {
+      spec: { aggregations: { alias: string }[]; groupBy: { name: string }[]; order: { key: { name: string }; direction: string }[] };
+    }).spec;
+    expect(spec.aggregations.map((a) => a.alias)).toEqual(['count', 'errors', 'p99']);
+    expect(spec.groupBy).toEqual([{ name: 'http.route' }]);
+    expect(spec.order).toEqual([{ key: { name: 'count' }, direction: 'desc' }]);
   });
 });

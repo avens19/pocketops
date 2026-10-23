@@ -6,6 +6,8 @@ export type ExploreParams = {
   q?: string;
   service?: string;
   traceId?: string;
+  /** Comma-separated fields to group traces by (from an explorer link). */
+  groupBy?: string;
   last?: string;
   from?: string;
   to?: string;
@@ -22,11 +24,11 @@ export function expressionFromParams(p: ExploreParams): string {
 }
 
 export function hasExploreFilter(p: ExploreParams): boolean {
-  return !!(p.q || p.service || p.traceId);
+  return !!(p.q || p.service || p.traceId || p.groupBy);
 }
 
 export function exploreSignature(p: ExploreParams): string {
-  return [p.q, p.service, p.traceId, p.last, p.from, p.to, p.n].join('|');
+  return [p.q, p.service, p.traceId, p.groupBy, p.last, p.from, p.to, p.n].join('|');
 }
 
 /**
@@ -36,7 +38,10 @@ export function exploreSignature(p: ExploreParams): string {
 export function applyRouteFilter(signal: ExplorerSignal, p: ExploreParams): void {
   if (!hasExploreFilter(p)) return;
   const sig = exploreSignature(p);
-  if (explorer.get(signal).sig !== sig) explorer.setExpression(signal, expressionFromParams(p), '', sig);
+  if (explorer.get(signal).sig !== sig) {
+    explorer.setExpression(signal, expressionFromParams(p), '', sig);
+    if (signal === 'traces' && p.groupBy) explorer.setGroupBy('traces', p.groupBy.split(',').filter(Boolean));
+  }
 }
 
 export function paramsLanded(signal: ExplorerSignal, p: ExploreParams): boolean {

@@ -318,7 +318,12 @@ export interface SpanGroup {
   /** Values of the grouping attributes, in the order they were requested. */
   labels: string[];
   count: number;
+  errors: number;
+  /** p99 duration in milliseconds. */
+  p99Ms: number;
 }
+
+const GROUP_STATS = ['count', 'errors', 'p99'];
 
 export async function fetchSpanGroups(
   client: SignozClient,
@@ -328,11 +333,12 @@ export async function fetchSpanGroups(
   signal?: AbortSignal,
 ): Promise<SpanGroup[]> {
   const resp = await queryRange(client, spanGroupsQuery(range, expression, groupBy), signal);
-  return parseScalarRows(resp, ['count']).map((r) => ({
-    labels: Object.keys(r)
-      .filter((k) => k !== 'count')
-      .map((k) => String(r[k] ?? '')),
+  return parseScalarRows(resp, GROUP_STATS).map((r) => ({
+    // Group columns come back keyed by field name; ask for them in the order requested.
+    labels: groupBy.map((name) => (r[name] === null || r[name] === undefined ? '' : String(r[name]))),
     count: num(r.count),
+    errors: num(r.errors),
+    p99Ms: num(r.p99) / 1e6,
   }));
 }
 

@@ -9,6 +9,7 @@ beforeEach(() => {
   explorer.clear('logs');
   explorer.setRootOnly('traces', true);
   explorer.setErrorsOnly('traces', false);
+  explorer.setGroupBy('traces', []);
 });
 
 describe('explorer store', () => {
@@ -44,5 +45,20 @@ describe('explorer store', () => {
     expect(explorer.get('logs').sig).toBe('sig-1');
     explorer.clear('logs');
     expect(explorer.get('logs').sig).toBe('sig-1');
+  });
+
+  it('leaves group-by when drilling into a group or when a query arrives from elsewhere', () => {
+    explorer.setGroupBy('traces', ['http.route']);
+    explorer.investigate('traces', eq('http.route', '/api/cart'));
+    expect(explorer.get('traces').groupBy).toEqual([]);
+    explorer.setGroupBy('traces', ['http.route']);
+    explorer.setExpression('traces', "service.name = 'x'");
+    expect(explorer.get('traces').groupBy).toEqual([]);
+  });
+
+  it('keeps group-by across clearing the filter', () => {
+    explorer.setGroupBy('traces', ['http.route']);
+    explorer.clear('traces');
+    expect(explorer.get('traces').groupBy).toEqual(['http.route']);
   });
 });

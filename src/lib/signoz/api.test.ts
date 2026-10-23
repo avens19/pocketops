@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { SignozClient } from './client';
 import waterfall from './fixtures/waterfall.json';
-import { fetchFieldKeys, fetchFieldValues, fetchRuleQuery, fetchTrace, listRules, normalizeRule, sortRules, toLogRow, toServiceStats } from './api';
+import { fetchFieldKeys, fetchFieldValues, fetchRuleQuery, fetchSpanGroups, fetchTrace, listRules, normalizeRule, sortRules, toLogRow, toServiceStats } from './api';
 
 const creds = { endpoint: 'https://s.example.com', apiKey: 'k' };
 
@@ -160,5 +160,38 @@ describe('field keys and values', () => {
   it('tolerates a response with no values', async () => {
     const { client } = clientFor({ '/api/v1/fields/values': {} });
     expect(await fetchFieldValues(client, 'traces', 'x', '', range)).toEqual([]);
+  });
+});
+
+describe('fetchSpanGroups', () => {
+  const range = { startMs: 1, endMs: 2 };
+  const columns = [
+    { name: 'http.route', columnType: 'group', aggregationIndex: 0 },
+    // Aggregation columns can arrive in any order; the index says which is which.
+    { name: '__result_2', columnType: 'aggregation', aggregationIndex: 2 },
+    { name: '__result_0', columnType: 'aggregation', aggregationIndex: 0 },
+    { name: '__result_1', columnType: 'aggregation', aggregationIndex: 1 },
+  ];
+
+  it('reads count, errors and p99 (ns to ms) per group by aggregation index', async () => {
+    const { client } = clientFor({
+      '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns, data: [['/api/cart', 70_000_000, 3200, 45], [null, 1_000_000, 5, 0]] }] } },
+    });
+    expect(await fetchSpanGroups(client, range, '', ['http.route'])).toEqual([
+      { labels: ['/api/cart'], count: 3200, errors: 45, p99Ms: 70 },
+      { labels: [''], count: 5, errors: 0, p99Ms: 1 },
+    ]);
+  });
+
+  it('keeps the requested order of several grouping fields', async () => {
+    const cols = [
+      { name: 'b', columnType: 'group', aggregationIndex: 0 },
+      { name: 'a', columnType: 'group', aggregationIndex: 0 },
+      { name: '__result_0', columnType: 'aggregation', aggregationIndex: 0 },
+      { name: '__result_1', columnType: 'aggregation', aggregationIndex: 1 },
+      { name: '__result_2', columnType: 'aggregation', aggregationIndex: 2 },
+    ];
+    const { client } = clientFor({ '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns: cols, data: [['B1', 'A1', 7, 1, 2_000_000]] }] } } });
+    expect((await fetchSpanGroups(client, range, '', ['a', 'b']))[0].labels).toEqual(['A1', 'B1']);
   });
 });

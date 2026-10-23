@@ -208,7 +208,8 @@ function background(t) {
 
 const sent = { spans: 0, logs: 0, metrics: 0 };
 async function post(path, body) {
-  const res = await fetch(`${OTLP}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  // A timeout so one hung request (the collector restarting) cannot stall a live run forever.
+  const res = await fetch(`${OTLP}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10_000) });
   if (!res.ok) throw new Error(`${path} -> ${res.status} ${await res.text()}`);
 }
 
@@ -284,7 +285,12 @@ if (LIVE) {
   for (;;) {
     await new Promise((r) => setTimeout(r, 10000));
     const t = Date.now();
-    await batch(last, t, 28);
-    last = t;
+    try {
+      await batch(last, t, 28);
+      last = t;
+    } catch (e) {
+      // Keep going: the next batch covers the gap once the collector is back.
+      console.error(`batch failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 }

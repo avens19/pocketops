@@ -23,8 +23,12 @@ export function watchConnection(): () => void {
   return queryClient.getQueryCache().subscribe((event) => {
     if (event.type !== 'updated') return;
     const action = event.action;
-    if (action.type === 'success') set(nextStatus(status, { type: 'success' }, Date.now()));
-    else if (action.type === 'error') set(nextStatus(status, { type: 'error', error: action.error }, Date.now()));
+    if (action.type === 'success') {
+      const wasFailing = status.failing;
+      set(nextStatus(status, { type: 'success' }, Date.now()));
+      // Back online: screens that gave up while it was down would sit on their error until tapped. Retry them now, once.
+      if (wasFailing && !status.failing) void queryClient.refetchQueries({ predicate: (q) => q.state.status === 'error' });
+    } else if (action.type === 'error') set(nextStatus(status, { type: 'error', error: action.error }, Date.now()));
   });
 }
 

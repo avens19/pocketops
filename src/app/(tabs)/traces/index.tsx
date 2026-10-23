@@ -6,6 +6,7 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, Sty
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { FilterBar } from '@/components/filter-bar';
+import { GroupByEditor } from '@/components/filter-editor';
 import { Empty, ErrorState, Loading } from '@/components/query-state';
 import { RangeChip } from '@/components/range-chip';
 import { SearchField } from '@/components/search-field';
@@ -17,7 +18,7 @@ import { useWindowAnchor } from '@/hooks/use-window-anchor';
 import { useClient } from '@/lib/auth';
 import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
 import { explorer, useExplorer } from '@/lib/explorer-state';
-import { clausesToExpression } from '@/lib/filters';
+import { clausesToExpression, inferValue } from '@/lib/filters';
 import { formatCount, formatDuration } from '@/lib/format';
 import { SPAN_PAGE_SIZE, fetchSpanGroups, fetchSpans, type SpanRow } from '@/lib/signoz/api';
 import { quote, rangeSpecFromParams, resolveRange, type RangeSpec, type SpanSort } from '@/lib/signoz/queries';
@@ -35,9 +36,9 @@ function TracesView({ params }: { params: TracesParams }) {
   const client = useClient();
   const theme = useTheme();
   const [range, setRange] = useState<RangeSpec>(() => rangeSpecFromParams(params) ?? { key: '1h' });
-  const { clauses, text, sig, rootOnly, errorsOnly } = useExplorer('traces');
+  const { clauses, text, sig, rootOnly, errorsOnly, groupBy } = useExplorer('traces');
+  const [groupOpen, setGroupOpen] = useState(false);
   const [sort, setSort] = useState<SpanSort>('latest');
-  const groupBy = useMemo(() => (params.groupBy ? params.groupBy.split(',').filter(Boolean) : []), [params.groupBy]);
 
   const routeSig = exploreSignature(params);
   const landed = !hasExploreFilter(params) || sig === routeSig;
@@ -61,7 +62,7 @@ function TracesView({ params }: { params: TracesParams }) {
 
   const spans = useInfiniteQuery({
     queryKey: ['spans', client.endpoint, expression, sort, range, anchor],
-    enabled: landed,
+    enabled: landed && groupBy.length === 0,
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) => fetchSpans(client, resolved, expression, pageParam, sort, signal),
     getNextPageParam: (last, all) => (last.length === SPAN_PAGE_SIZE ? all.length * SPAN_PAGE_SIZE : undefined),
@@ -75,12 +76,25 @@ function TracesView({ params }: { params: TracesParams }) {
 
   const rows = useMemo(() => spans.data?.pages.flat() ?? [], [spans.data]);
 
+  /** Tapping a group shows its spans: one clause per grouping field, skipping empty values. */
+  function drillInto(labels: string[]) {
+    groupBy.forEach((key, i) => {
+      if (labels[i]) explorer.investigate('traces', { kind: 'filter', key, op: '=', value: inferValue(labels[i]) });
+    });
+    explorer.setGroupBy('traces', []);
+  }
+
   const header = (
     <View style={styles.header}>
       <SearchField value={text} onChangeText={(t) => explorer.setText('traces', t)} placeholder="Search span names" />
       <FilterBar signal="traces" range={resolved} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
         <RangeChip value={range} onChange={(key) => setRange({ key })} />
+        <Chip
+          label={groupBy.length > 0 ? `Group: ${groupBy.join(', ')}  ✕` : 'Group by'}
+          selected={groupBy.length > 0}
+          onPress={() => (groupBy.length > 0 ? explorer.setGroupBy('traces', []) : setGroupOpen(true))}
+        />
         <Chip label="Errors" selected={errorsOnly} onPress={() => explorer.setErrorsOnly('traces', !errorsOnly)} />
         <Chip label="Slowest" selected={sort === 'slowest'} onPress={() => setSort((s) => (s === 'slowest' ? 'latest' : 'slowest'))} />
         <Chip label="Root spans" selected={rootOnly} onPress={() => explorer.setRootOnly('traces', !rootOnly)} />
@@ -92,24 +106,48 @@ function TracesView({ params }: { params: TracesParams }) {
       ) : null}
       {groupBy.length > 0 ? (
         <View style={styles.groups}>
-          <ThemedText type="caption" style={styles.bold}>
-            COUNT BY {groupBy.join(', ').toUpperCase()}
-          </ThemedText>
+          <View style={styles.groupHead}>
+            <ThemedText type="caption" style={[styles.bold, styles.flex]}>
+              {groupBy.join(' · ').toUpperCase()}
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.bold, styles.num]}>
+              SPANS
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.bold, styles.num]}>
+              ERR
+            </ThemedText>
+            <ThemedText type="caption" style={[styles.bold, styles.num]}>
+              P99
+            </ThemedText>
+          </View>
           {groups.isPending ? (
             <Loading />
           ) : groups.isError ? (
             <ErrorState error={groups.error} onRetry={() => groups.refetch()} />
+          ) : (groups.data ?? []).length === 0 ? (
+            <Empty title="No spans found" hint="Try a wider time range or fewer filters." />
           ) : (
             <Card style={styles.table}>
               {(groups.data ?? []).map((g, i) => (
-                <View key={`${g.labels.join('|')}-${i}`} style={styles.groupRow}>
+                <Pressable
+                  key={`${g.labels.join('|')}-${i}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${g.labels.join(' ')}: ${g.count} spans, ${g.errors} errors. Show them`}
+                  onPress={() => drillInto(g.labels)}
+                  style={styles.groupRow}>
                   <ThemedText type="small" numberOfLines={2} style={styles.flex}>
                     {g.labels.map((l) => l || '(none)').join(' · ')}
                   </ThemedText>
                   <ThemedText type="small" style={styles.num}>
                     {formatCount(g.count)}
                   </ThemedText>
-                </View>
+                  <ThemedText type="small" color={g.errors > 0 ? 'danger' : 'textSecondary'} style={styles.num}>
+                    {formatCount(g.errors)}
+                  </ThemedText>
+                  <ThemedText type="small" style={styles.num}>
+                    {formatDuration(g.p99Ms)}
+                  </ThemedText>
+                </Pressable>
               ))}
             </Card>
           )}
@@ -119,31 +157,44 @@ function TracesView({ params }: { params: TracesParams }) {
   );
 
   let body: React.ReactNode = null;
-  if (!landed || spans.isPending) body = <Loading />;
+  if (groupBy.length > 0) body = null;
+  else if (!landed || spans.isPending) body = <Loading />;
   else if (spans.isError && rows.length === 0) body = <ErrorState error={spans.error} onRetry={() => spans.refetch()} />;
   else if (rows.length === 0) body = <Empty title="No spans found" hint="Try a wider time range or fewer filters." />;
 
   return (
-    <FlatList
-      data={body ? [] : rows}
-      keyExtractor={(r, i) => `${r.spanId || r.traceId}-${i}`}
-      contentInsetAdjustmentBehavior="automatic"
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="on-drag"
-      contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={spans.isRefetching && !spans.isFetchingNextPage} onRefresh={refresh} />}
-      ListHeaderComponent={
-        <>
-          {header}
-          {body}
-        </>
-      }
-      ListFooterComponent={spans.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : undefined}
-      onEndReachedThreshold={0.5}
-      onEndReached={() => spans.hasNextPage && !spans.isFetchingNextPage && spans.fetchNextPage()}
-      ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
-      renderItem={({ item }) => <SpanLine row={item} />}
-    />
+    <>
+      <FlatList
+        data={body || groupBy.length > 0 ? [] : rows}
+        keyExtractor={(r, i) => `${r.spanId || r.traceId}-${i}`}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={styles.list}
+        refreshControl={<RefreshControl refreshing={spans.isRefetching && !spans.isFetchingNextPage} onRefresh={refresh} />}
+        ListHeaderComponent={
+          <>
+            {header}
+            {body}
+          </>
+        }
+        ListFooterComponent={spans.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : undefined}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => spans.hasNextPage && !spans.isFetchingNextPage && spans.fetchNextPage()}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
+        renderItem={({ item }) => <SpanLine row={item} />}
+      />
+      <GroupByEditor
+        visible={groupOpen}
+        signal="traces"
+        range={resolved}
+        onClose={() => setGroupOpen(false)}
+        onSubmit={(keys) => {
+          explorer.setGroupBy('traces', keys);
+          setGroupOpen(false);
+        }}
+      />
+    </>
   );
 }
 
@@ -185,8 +236,9 @@ const styles = StyleSheet.create({
   chips: { gap: Spacing.two },
   groups: { gap: Spacing.two, marginTop: Spacing.one },
   table: { gap: Spacing.two },
-  groupRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
-  num: { minWidth: 56, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  groupHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three },
+  groupRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 6 },
+  num: { minWidth: 52, textAlign: 'right', fontVariant: ['tabular-nums'] },
   footer: { padding: Spacing.three },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: Spacing.three },
   line: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two + 2 },
