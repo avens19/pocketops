@@ -1,5 +1,5 @@
 import { Link, Stack } from 'expo-router';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { useTheme } from '@/hooks/use-theme';
@@ -11,7 +11,9 @@ export function TabStack({ title }: { title: string }) {
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerStyle: { backgroundColor: theme.background },
+        // On iOS 26 a header background colour makes the large title invisible. The transparent system header sits over
+        // `contentStyle`, which is the same colour, so it looks identical.
+        headerStyle: Platform.OS === 'ios' ? undefined : { backgroundColor: theme.background },
         headerTintColor: theme.accent,
         headerTitleStyle: { color: theme.text },
         contentStyle: { backgroundColor: theme.background },

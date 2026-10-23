@@ -90,7 +90,7 @@ export default function ConnectScreen() {
 
           <View style={styles.field}>
             <View style={styles.labelRow}>
-              <ThemedText type="small" style={styles.label}>
+              <ThemedText type="small" style={[styles.label, styles.labelFill]}>
                 API key
               </ThemedText>
               <View style={styles.labelActions}>
@@ -161,6 +161,8 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.two, marginBottom: Spacing.three },
   field: { gap: 6 },
   label: { fontWeight: '600' },
+  // Fill the row rather than shrink-wrap: on Android the bold text was measured narrower than it draws, so "key" wrapped and was clipped.
+  labelFill: { flex: 1 },
   labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   labelActions: { flexDirection: 'row', gap: Spacing.three },
   input: {
