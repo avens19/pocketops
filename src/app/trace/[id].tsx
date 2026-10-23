@@ -15,10 +15,11 @@ import { formatDuration, formatTime } from '@/lib/format';
 import { fetchTrace } from '@/lib/signoz/api';
 import { barGeometry, descendantCounts, firstErrorSpan, serviceColor, visibleSpans, type TraceDetail, type TraceSpan } from '@/lib/trace';
 
-const INDENT = 14;
-const MAX_INDENT_LEVELS = 8;
-
-/** One trace as a waterfall: every span on a shared timeline, indented by depth, with details one tap away. */
+/**
+ * One trace as a waterfall: every span on a shared timeline, with details one tap away. Labels are not indented by depth. A phone
+ * is too narrow for it (a span a few levels down lost half its row and its name), and the bar already carries the structure: a child
+ * starts and ends inside its parent's bar. The chevron still folds a subtree.
+ */
 export default function TraceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const client = useClient();
@@ -170,12 +171,11 @@ function SpanRow({ span, trace, open, collapsed, hiddenCount, onToggleOpen, onTo
   const theme = useTheme();
   const { left, width } = barGeometry(span, trace);
   const color = span.hasError ? theme.danger : serviceColor(span.service);
-  const indent = Math.min(span.level, MAX_INDENT_LEVELS) * INDENT;
 
   return (
     <View style={open ? { backgroundColor: theme.card } : undefined}>
       <Pressable accessibilityRole="button" accessibilityLabel={`${span.service} ${span.name}, ${formatDuration(span.durationMs)}`} accessibilityState={{ expanded: open }} onPress={onToggleOpen} style={styles.row}>
-        <View style={[styles.titleLine, { paddingLeft: indent }]}>
+        <View style={styles.titleLine}>
           {span.hasChildren ? (
             <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand children' : 'Collapse children'} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} onPress={onToggleCollapsed} style={styles.chevron}>
               <ThemedText type="caption">{collapsed ? '▸' : '▾'}</ThemedText>
@@ -199,23 +199,31 @@ function SpanRow({ span, trace, open, collapsed, hiddenCount, onToggleOpen, onTo
         <View style={[styles.track, { backgroundColor: theme.backgroundSelected }]}>
           <View style={[styles.bar, { left: `${left * 100}%`, width: `${width * 100}%`, backgroundColor: color }]} />
         </View>
-        <ThemedText type="caption" numberOfLines={1} style={{ paddingLeft: indent + 28 }}>
+        <ThemedText type="caption" numberOfLines={1} style={styles.meta}>
           {span.service}
           {span.kind ? ` · ${span.kind}` : ''}
         </ThemedText>
       </Pressable>
-      {open ? <SpanDetail span={span} /> : null}
+      {open ? <SpanDetail span={span} offsetMs={span.startMs - trace.startMs} /> : null}
     </View>
   );
 }
 
-function SpanDetail({ span }: { span: TraceSpan }) {
+function SpanDetail({ span, offsetMs }: { span: TraceSpan; offsetMs: number }) {
   const router = useRouter();
   const theme = useTheme();
   const exceptions = span.events.filter((e) => e.name === 'exception' || e.isError);
   const otherEvents = span.events.filter((e) => !exceptions.includes(e));
   return (
     <View style={styles.detail}>
+      {/* The row truncates a long name to one line; this is where it is read in full. */}
+      <ThemedText type="heading" selectable>
+        {span.name}
+      </ThemedText>
+      <ThemedText type="caption">
+        {span.service}
+        {span.kind ? ` · ${span.kind}` : ''} · {formatDuration(span.durationMs)} · starts +{formatDuration(Math.max(offsetMs, 0))}
+      </ThemedText>
       {span.hasError ? (
         <View style={[styles.errorBox, { borderColor: theme.danger }]}>
           <ThemedText type="small" color="danger" style={styles.bold}>
@@ -291,6 +299,8 @@ const styles = StyleSheet.create({
   dot: { width: 8, height: 8, borderRadius: 4 },
   name: { flex: 1, fontWeight: '600' },
   badge: { fontWeight: '700' },
+  // Lines the service up under the span name: chevron (18) + dot (8) + two gaps (6).
+  meta: { paddingLeft: 38 },
   duration: { fontVariant: ['tabular-nums'] },
   track: { height: 8, borderRadius: 4, overflow: 'hidden' },
   bar: { position: 'absolute', top: 0, bottom: 0, borderRadius: 4, minWidth: 3 },
