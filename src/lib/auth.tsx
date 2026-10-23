@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
+import { resetConnection } from '@/lib/connection';
 import { clearCredentials, loadCredentials, saveCredentials } from '@/lib/credentials';
 import { SignozClient, type Credentials } from '@/lib/signoz/client';
 
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (credentials: Credentials) => {
       await saveCredentials(credentials);
       queryClient.clear();
+      resetConnection();
       setState({ status: 'signed-in', client: new SignozClient(credentials) });
     },
     [queryClient],
@@ -46,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await clearCredentials();
     queryClient.clear();
+    resetConnection();
     setState({ status: 'signed-out' });
   }, [queryClient]);
 

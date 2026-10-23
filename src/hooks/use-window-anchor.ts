@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 // Reading the clock is deliberate here: it fixes where a query window ends. Kept out of component bodies for the purity lint.
 const clock = () => Date.now();
@@ -14,5 +14,6 @@ export function useWindowAnchor(key: string): [anchor: number, refresh: () => vo
     anchor = clock();
     setState({ key, t: anchor });
   }
-  return [anchor, () => setState({ key, t: clock() })];
+  const refresh = useCallback(() => setState({ key, t: clock() }), [key]);
+  return [anchor, refresh];
 }

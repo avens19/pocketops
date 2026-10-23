@@ -22,7 +22,7 @@ export default function LogDetailScreen() {
   const client = useClient();
   const theme = useTheme();
   const router = useRouter();
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<'message' | 'json' | null>(null);
 
   const log = useQuery({
     queryKey: ['log', client.endpoint, id],
@@ -34,10 +34,18 @@ export default function LogDetailScreen() {
   if (!log.data) return <Empty title="Log not found" hint="It may be older than 30 days or have been dropped." />;
   const row = log.data;
 
-  async function copy() {
-    await Clipboard.setStringAsync(row.body);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function copy(what: 'message' | 'json') {
+    const text =
+      what === 'message'
+        ? row.body
+        : JSON.stringify(
+            { timestamp: row.timestamp, severity: row.severity, body: row.body, service: row.service, trace_id: row.traceId, attributes: row.attributes, resources: row.resources },
+            null,
+            2,
+          );
+    await Clipboard.setStringAsync(text);
+    setCopied(what);
+    setTimeout(() => setCopied(null), 1500);
   }
 
   return (
@@ -59,11 +67,18 @@ export default function LogDetailScreen() {
         <ThemedText type="mono" selectable>
           {row.body}
         </ThemedText>
-        <Pressable accessibilityRole="button" onPress={copy}>
-          <ThemedText type="small" color="accent" style={styles.bold}>
-            {copied ? 'Copied' : 'Copy message'}
-          </ThemedText>
-        </Pressable>
+        <View style={styles.copyRow}>
+          <Pressable accessibilityRole="button" onPress={() => copy('message')}>
+            <ThemedText type="small" color="accent" style={styles.bold}>
+              {copied === 'message' ? 'Copied' : 'Copy message'}
+            </ThemedText>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => copy('json')}>
+            <ThemedText type="small" color="accent" style={styles.bold}>
+              {copied === 'json' ? 'Copied' : 'Copy as JSON'}
+            </ThemedText>
+          </Pressable>
+        </View>
       </Card>
 
       <View style={styles.actions}>
@@ -120,6 +135,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.three, gap: Spacing.three },
   meta: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },
   bold: { fontWeight: '600' },
+  copyRow: { flexDirection: 'row', gap: Spacing.four },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   hint: { textAlign: 'center' },
   section: { gap: Spacing.two },

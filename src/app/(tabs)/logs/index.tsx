@@ -1,4 +1,4 @@
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -45,6 +45,8 @@ function LogsView({ params }: { params: LogsParams }) {
   const [range, setRange] = useState<RangeSpec>(() => rangeSpecFromParams(params) ?? { key: '1h' });
   const { clauses, text, sig } = useExplorer('logs');
   const [levels, setLevels] = useState<LogLevel[]>([]);
+  const [live, setLive] = useState(false);
+  const [atTop, setAtTop] = useState(true);
 
   // A link, "view logs for this service/trace" or a pasted URL arrives as params and replaces the filter. Hold the
   // first request until that has landed, so it is the right one.
@@ -62,6 +64,14 @@ function LogsView({ params }: { params: LogsParams }) {
   const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, expression, searchText, levels]));
   const resolved = resolveRange(range, anchor);
 
+  // Live tail: move the window to now every few seconds, but only while the user is at the top, so scrolling back through
+  // history is never yanked away. The previous rows stay on screen until the next page lands.
+  useEffect(() => {
+    if (!live || !atTop) return;
+    const timer = setInterval(refresh, 3000);
+    return () => clearInterval(timer);
+  }, [live, atTop, refresh]);
+
   const logs = useInfiniteQuery({
     queryKey: ['logs', client.endpoint, range, anchor, filter],
     enabled: landed,
@@ -69,6 +79,7 @@ function LogsView({ params }: { params: LogsParams }) {
     queryFn: ({ pageParam, signal }) => fetchLogs(client, resolved, filter, pageParam, signal),
     getNextPageParam: (last, all) => (last.length === LOG_PAGE_SIZE ? all.length * LOG_PAGE_SIZE : undefined),
     gcTime: 60_000,
+    placeholderData: live ? keepPreviousData : undefined,
   });
 
   const rows = useMemo(() => logs.data?.pages.flat() ?? [], [logs.data]);
@@ -83,6 +94,7 @@ function LogsView({ params }: { params: LogsParams }) {
       />
       <FilterBar signal="logs" range={resolved} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+        <Chip label={live ? '● Live' : 'Live'} selected={live} onPress={() => setLive((v) => !v)} />
         <RangeChip value={range} onChange={(key) => setRange({ key })} />
         {LOG_LEVELS.map((l) => (
           <Chip key={l} label={l} selected={levels.includes(l)} onPress={() => toggleLevel(l)} />
@@ -103,8 +115,16 @@ function LogsView({ params }: { params: LogsParams }) {
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      scrollEventThrottle={100}
+      onScroll={(e) => {
+        const top = e.nativeEvent.contentOffset.y < 120;
+        if (top !== atTop) setAtTop(top);
+      }}
+      // While live and at the top, new rows prepend without pushing what you are reading down.
+      maintainVisibleContentPosition={live ? { minIndexForVisible: 0, autoscrollToTopThreshold: 120 } : undefined}
       contentContainerStyle={styles.list}
-      refreshControl={<RefreshControl refreshing={logs.isRefetching && !logs.isFetchingNextPage} onRefresh={refresh} />}
+      // The spinner is for a pull-to-refresh; live polling refreshes quietly in the background.
+      refreshControl={<RefreshControl refreshing={!live && logs.isRefetching && !logs.isFetchingNextPage} onRefresh={refresh} />}
       ListHeaderComponent={
         <>
           {header}
