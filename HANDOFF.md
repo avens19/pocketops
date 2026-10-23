@@ -15,7 +15,7 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 
 | Thing | State |
 |---|---|
-| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (149 tests) |
+| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (161 tests) |
 | Android debug build | Builds and runs (Gradle 9.4, SDK 37, NDK 27) |
 | Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
 | Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
@@ -105,6 +105,15 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
 5. Dashboards are not covered at all. A link tapped while signed out is lost.
 6. Trace operators (`B → A`) cannot run.
 7. Then release builds, `eas update` to a channel, and store-listing checks.
+
+## Structured log bodies (found on a real instance)
+
+A log's `body` is not always text: structured loggers arrive as a JSON **object**, with the readable text in `message`
+(`lib/log-body.ts`). Showing `String(body)` printed "[object Object]". Now: list rows lead with the message and show a few fields
+(`method=GET path=/health status=200`) on a quieter line; the detail screen shows the message, the whole body as JSON, and every field
+as a tappable row filtering on `body.<key>` (verified on a real instance: `body.method = 'GET'`, `body.status = 200` both work). JSON
+that arrives as *text* is shown the same way but its fields are read-only, because the server cannot filter inside a string. Note
+`body CONTAINS 'x'` (the Logs search box) only searches `body.message` on such instances.
 
 ## Release-only bugs worth remembering
 

@@ -14,12 +14,14 @@ interface AttributeListProps {
   values: Record<string, string>;
   /** The explorer a tap filters first; the other is offered as a secondary action. */
   primary: ExplorerSignal;
+  /** Offer to filter the other explorer too. Off for fields only one signal has (a log's `body.*`). */
+  secondary?: boolean;
 }
 
 const LABEL: Record<ExplorerSignal, string> = { logs: 'logs', traces: 'traces' };
 
 /** Key/value rows where tapping one opens "add to filter / exclude / copy". The explorer it filters is the point of the screen. */
-export function AttributeList({ values, primary }: AttributeListProps) {
+export function AttributeList({ values, primary, secondary = true }: AttributeListProps) {
   const theme = useTheme();
   const [selected, setSelected] = useState<{ key: string; value: string } | null>(null);
   const entries = Object.entries(values).sort(([a], [b]) => a.localeCompare(b));
@@ -38,12 +40,12 @@ export function AttributeList({ values, primary }: AttributeListProps) {
           </Pressable>
         ))}
       </View>
-      <AttributeMenu attribute={selected} primary={primary} onClose={() => setSelected(null)} />
+      <AttributeMenu attribute={selected} primary={primary} secondary={secondary} onClose={() => setSelected(null)} />
     </>
   );
 }
 
-function AttributeMenu({ attribute, primary, onClose }: { attribute: { key: string; value: string } | null; primary: ExplorerSignal; onClose: () => void }) {
+function AttributeMenu({ attribute, primary, secondary: offerSecondary, onClose }: { attribute: { key: string; value: string } | null; primary: ExplorerSignal; secondary: boolean; onClose: () => void }) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -73,7 +75,7 @@ function AttributeMenu({ attribute, primary, onClose }: { attribute: { key: stri
     ? [
         { label: `Show only ${LABEL[primary]} with this`, hint: `${attribute.key} is ${attribute.value}`, filters: true, onPress: () => apply(primary, '=') },
         { label: `Hide ${LABEL[primary]} with this`, hint: `${attribute.key} is not ${attribute.value}`, filters: true, onPress: () => apply(primary, '!=') },
-        { label: `Show ${LABEL[secondary]} with this`, filters: true, onPress: () => apply(secondary, '=') },
+        ...(offerSecondary ? [{ label: `Show ${LABEL[secondary]} with this`, filters: true, onPress: () => apply(secondary, '=') }] : []),
         { label: copied ? 'Copied' : 'Copy value', filters: false, onPress: copy },
       ].filter((item) => canFilter || !item.filters)
     : [];

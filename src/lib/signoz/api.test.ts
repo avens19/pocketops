@@ -221,3 +221,34 @@ describe('fetchSpanGroups', () => {
     expect((await fetchSpanGroups(client, range, '', ['a', 'b', 'c']))[0].values).toEqual(['123', 123, true]);
   });
 });
+
+describe('toLogRow with a structured body', () => {
+  const data = {
+    id: 'log-1',
+    severity_text: 'info',
+    body: { message: 'request handled', method: 'GET', path: '/health', status: 200 },
+    resources_string: { 'service.name': 'api' },
+    attributes_string: { 'log.iostream': 'stderr' },
+  };
+
+  it('turns an object body into a readable summary instead of "[object Object]"', () => {
+    const row = toLogRow({ timestamp: '2026-10-23T03:00:00Z', data });
+    expect(row.body).toBe('request handled  method=GET path=/health status=200');
+    expect(row.bodyPretty).toContain('"status": 200');
+    expect(row.bodyFields).toMatchObject({ method: 'GET', status: '200' });
+    expect(row.bodyFilterable).toBe(true);
+    expect(row.severity).toBe('INFO');
+  });
+
+  it('keeps plain-text bodies exactly as they were', () => {
+    const row = toLogRow({ timestamp: 't', data: { ...data, body: 'stock reserved' } });
+    expect(row).toMatchObject({ body: 'stock reserved', bodyPretty: 'stock reserved', bodyFilterable: false });
+    expect(row.bodyFields).toBeUndefined();
+  });
+
+  it('makes an id from the summary when the server sends none', () => {
+    const row = toLogRow({ timestamp: '2026-10-23T03:00:00Z', data: { ...data, id: undefined } });
+    expect(row.id).toBe('2026-10-23T03:00:00Z-request handled  method=');
+  });
+});
+

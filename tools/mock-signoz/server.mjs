@@ -32,13 +32,38 @@ const bodies = [
   'loaded config from /etc/app.yaml',
   'POST /api/checkout 201 88ms',
 ];
+// Structured loggers (JSON lines) reach SigNoz as an object body, with the readable text in `message`. Every third mock log is one.
+function structuredBody(i) {
+  const failing = i % 6 === 0;
+  return {
+    bytes_in: 0,
+    bytes_out: failing ? 0 : 174,
+    host: `10.1.2.${i % 200}:3000`,
+    latency: 400000 + i * 13,
+    latency_human: `${(400 + (i % 90)).toFixed(3)}µs`,
+    level: failing ? 'error' : 'info',
+    log_type: 'access',
+    logger: 'api',
+    message: failing ? 'request failed' : 'request handled',
+    method: i % 2 ? 'GET' : 'POST',
+    path: ['/health', '/api/cart', '/api/checkout'][i % 3],
+    referer: '',
+    remote_ip: `10.1.3.${i % 200}`,
+    status: failing ? 502 : 200,
+    trace: 'a1b2c3d4-0000-4000-8000-000000000000',
+    ts: 1792725237.745 + i,
+    uri: ['/health', '/api/cart', '/api/checkout'][i % 3],
+    user_agent: 'probe/1.0',
+  };
+}
+
 function logRow(i, base) {
   const ts = new Date(base - i * 7000).toISOString();
   return {
     timestamp: ts,
     data: {
       id: `log-${i}`,
-      body: `${bodies[i % bodies.length]} #${i}`,
+      body: i % 3 === 0 ? structuredBody(i) : `${bodies[i % bodies.length]} #${i}`,
       severity_text: levels[i % levels.length],
       trace_id: i % 3 === 0 ? 'a1b2c3d4e5f60718293a4b5c6d7e8f90' : '',
       resources_string: { 'service.name': services[i % services.length].name, 'k8s.pod.name': `pod-${i % 4}` },
@@ -70,7 +95,7 @@ function queryRange(body) {
     const text = filter.match(/body CONTAINS '([^']+)'/)?.[1];
     const wanted = filter.match(/severity_text IN \(([^)]+)\)/)?.[1];
     let rows = Array.from({ length: 400 }, (_, i) => logRow(i, now()));
-    if (text) rows = rows.filter((r) => r.data.body.includes(text));
+    if (text) rows = rows.filter((r) => String(typeof r.data.body === 'object' ? r.data.body.message : r.data.body).includes(text));
     if (wanted) rows = rows.filter((r) => wanted.includes(`'${r.data.severity_text}'`));
     if (service) rows = rows.filter((r) => r.data.resources_string['service.name'] === service);
     const offset = spec.offset ?? 0;

@@ -10,7 +10,7 @@ import { RangeChip } from '@/components/range-chip';
 import { SearchField } from '@/components/search-field';
 import { severityColor } from '@/components/severity';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Fonts, Spacing } from '@/constants/theme';
 import { useAppActive } from '@/hooks/use-app-active';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useWindowAnchor } from '@/hooks/use-window-anchor';
@@ -179,8 +179,13 @@ function LogLine({ row }: { row: LogRow }) {
             ) : null}
           </View>
           <ThemedText type="mono" numberOfLines={3}>
-            {row.body}
+            {row.headline}
           </ThemedText>
+          {row.details ? (
+            <ThemedText type="caption" style={styles.details} numberOfLines={2}>
+              {row.details}
+            </ThemedText>
+          ) : null}
         </View>
       </Pressable>
     </Link>
@@ -198,4 +203,5 @@ const styles = StyleSheet.create({
   line: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   bar: { width: 3, borderRadius: 2 },
   meta: { flexDirection: 'row', gap: 6, marginBottom: 2 },
+  details: { fontFamily: Fonts.mono, marginTop: 2 },
 });

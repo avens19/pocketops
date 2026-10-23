@@ -5,7 +5,7 @@
 #
 # Signing comes from ~/.pocketops/signing.env (STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD), never from the repo. Create the
 # keystore once with keytool and keep a backup: an APK signed with a different key cannot update this one, only replace it after an
-# uninstall. Needs JDK 17+ and the Android SDK (JAVA_HOME, ANDROID_HOME). Output: dist/pocketops-<version>.apk
+# uninstall. Needs JDK 17+ and the Android SDK (JAVA_HOME, ANDROID_HOME). Output: dist/pocketops-<version>-<abis>.apk
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,5 +26,6 @@ VERSION=$(node -p "require('./app.json').expo.version")
     -Pandroid.injected.signing.key.password="$KEY_PASSWORD" )
 
 mkdir -p dist
-cp android/app/build/outputs/apk/release/app-release.apk "dist/pocketops-$VERSION.apk"
-echo "Built dist/pocketops-$VERSION.apk"
+OUT="dist/pocketops-$VERSION-${ABIS//,/+}.apk"
+cp android/app/build/outputs/apk/release/app-release.apk "$OUT"
+echo "Built $OUT"

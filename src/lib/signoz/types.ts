@@ -33,7 +33,18 @@ export interface TimelineItem {
 export interface LogRow {
   id: string;
   timestamp: string;
+  /** One line: the text, or for a structured body its message plus a few fields. */
   body: string;
+  /** The log's message: plain text, or a structured body's `message`. Leads a list row. */
+  headline: string;
+  /** A few telling fields beside the message, for a quieter second line (may be empty). */
+  details: string;
+  /** The whole body, readable (pretty JSON for a structured body). */
+  bodyPretty: string;
+  /** A structured body's fields by dotted path, when it has any. */
+  bodyFields?: Record<string, string>;
+  /** The server returned the body as an object, so its fields can be filtered on as `body.<key>`. */
+  bodyFilterable: boolean;
   severity: string;
   service?: string;
   traceId?: string;

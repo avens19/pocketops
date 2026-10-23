@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Card } from '@/components/card';
 import { AttributeList } from '@/components/attribute-list';
 import { Chip } from '@/components/chip';
+import { KeyValues } from '@/components/key-values';
 import { Empty, ErrorState, Loading } from '@/components/query-state';
 import { severityColor } from '@/components/severity';
 import { ThemedText } from '@/components/themed-text';
@@ -37,9 +38,18 @@ export default function LogDetailScreen() {
   async function copy(what: 'message' | 'json') {
     const text =
       what === 'message'
-        ? row.body
+        ? row.bodyPretty
         : JSON.stringify(
-            { timestamp: row.timestamp, severity: row.severity, body: row.body, service: row.service, trace_id: row.traceId, attributes: row.attributes, resources: row.resources },
+            {
+              timestamp: row.timestamp,
+              severity: row.severity,
+              // A structured body goes in as the object it is, not as a string of escaped JSON.
+              body: row.bodyFields ? parseJson(row.bodyPretty) : row.bodyPretty,
+              service: row.service,
+              trace_id: row.traceId,
+              attributes: row.attributes,
+              resources: row.resources,
+            },
             null,
             2,
           );
@@ -47,6 +57,8 @@ export default function LogDetailScreen() {
     setCopied(what);
     setTimeout(() => setCopied(null), 1500);
   }
+
+  const bodyFields = row.bodyFields && Object.keys(row.bodyFields).length > 0 ? row.bodyFields : undefined;
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
@@ -64,13 +76,19 @@ export default function LogDetailScreen() {
       </View>
 
       <Card>
+        {/* A structured body leads with its message, then the whole object. */}
+        {bodyFields ? (
+          <ThemedText selectable style={styles.bold}>
+            {row.headline}
+          </ThemedText>
+        ) : null}
         <ThemedText type="mono" selectable>
-          {row.body}
+          {row.bodyPretty}
         </ThemedText>
         <View style={styles.copyRow}>
           <Pressable accessibilityRole="button" onPress={() => copy('message')}>
             <ThemedText type="small" color="accent" style={styles.bold}>
-              {copied === 'message' ? 'Copied' : 'Copy message'}
+              {copied === 'message' ? 'Copied' : bodyFields ? 'Copy body' : 'Copy message'}
             </ThemedText>
           </Pressable>
           <Pressable accessibilityRole="button" onPress={() => copy('json')}>
@@ -103,6 +121,16 @@ export default function LogDetailScreen() {
         ) : null}
       </View>
 
+      {bodyFields ? (
+        <Section title="Body fields">
+          {row.bodyFilterable ? (
+            // Fields inside a structured body are queried as body.<key>; only logs have them, so no "show traces" action.
+            <AttributeList values={Object.fromEntries(Object.entries(bodyFields).map(([k, v]) => [`body.${k}`, v]))} primary="logs" secondary={false} />
+          ) : (
+            <KeyValues values={bodyFields} />
+          )}
+        </Section>
+      ) : null}
       {Object.keys(row.attributes).length > 0 ? (
         <Section title="Attributes">
           <AttributeList values={row.attributes} primary="logs" />
@@ -141,3 +169,11 @@ const styles = StyleSheet.create({
   section: { gap: Spacing.two },
   sectionTitle: { fontWeight: '700', letterSpacing: 0.6 },
 });
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return text;
+  }
+}

@@ -21,6 +21,7 @@ import {
   topOperationsQuery,
   traceSpansQuery,
 } from './queries';
+import { parseLogBody } from '../log-body';
 import { parseRuleQuery, type RuleQuery } from '../rule-query';
 import { buildTree, parseWaterfall, type FlatSpan, type TraceDetail } from '../trace';
 import type {
@@ -196,10 +197,17 @@ export function toLogRow(row: RawRow): LogRow {
   const resources = flatten(d, 'resources_string', 'resources', 'resource');
   const attributes = flatten(d, 'attributes_string', 'attributes_number', 'attributes_bool', 'attributes');
   const severity = String(d.severity_text ?? d.severity ?? '').toUpperCase();
+  // The body can be text or, for structured loggers, an object; String() on that prints "[object Object]".
+  const body = parseLogBody(d.body);
   return {
-    id: String(d.id ?? `${row.timestamp}-${String(d.body ?? '').slice(0, 24)}`),
+    id: String(d.id ?? `${row.timestamp}-${body.summary.slice(0, 24)}`),
     timestamp: row.timestamp || String(d.timestamp ?? ''),
-    body: String(d.body ?? ''),
+    body: body.summary,
+    headline: body.headline,
+    details: body.details,
+    bodyPretty: body.pretty,
+    bodyFields: body.fields,
+    bodyFilterable: body.filterable,
     severity,
     service: resources['service.name'] ?? (typeof d['service.name'] === 'string' ? d['service.name'] : undefined),
     traceId: typeof d.trace_id === 'string' && d.trace_id ? d.trace_id : undefined,
