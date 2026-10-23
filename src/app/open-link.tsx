@@ -52,6 +52,7 @@ export default function OpenLinkScreen() {
         autoCapitalize="none"
         autoCorrect={false}
         multiline
+        scrollEnabled
         style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }]}
       />
       {error ? (
@@ -84,6 +85,9 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.three, gap: Spacing.three },
   input: {
     minHeight: 96,
+    // Explorer links carry the whole query double-URL-encoded and run to thousands of characters; uncapped, the field pushed the
+    // buttons off screen. Past this height the text scrolls inside the field instead.
+    maxHeight: 168,
     fontSize: 15,
     padding: Spacing.three,
     borderRadius: Radius.medium,
