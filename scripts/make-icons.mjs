@@ -54,7 +54,10 @@ const assets = {
 
 for (const [name, markup] of Object.entries(assets)) {
   const out = join(root, name);
-  const png = await sharp(Buffer.from(markup)).png().toBuffer();
+  let image = sharp(Buffer.from(markup));
+  // App Store Connect rejects a 1024 icon that carries an alpha channel, even a fully opaque one.
+  if (name === 'icon.png') image = image.removeAlpha();
+  const png = await image.png().toBuffer();
   writeFileSync(out, png);
   console.log('wrote', name, `${png.length} bytes`);
 }

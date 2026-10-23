@@ -20,8 +20,10 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
-        }
-      }
+        },
+        "NSLocalNetworkUsageDescription": "PocketOps connects to your SigNoz server. If it runs on your local network, this lets the app reach it."
+      },
+      "buildNumber": "1"
     },
     "android": {
       "package": "com.andrewovens.pocketops",
@@ -34,7 +36,8 @@
       "predictiveBackGestureEnabled": false,
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
-      ]
+      ],
+      "versionCode": 1
     },
     "plugins": [
       "expo-router",

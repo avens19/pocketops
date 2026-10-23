@@ -46,3 +46,7 @@ example
 *.log
 emu.err
 /.claude
+
+# store listing: review credentials stay out of the public repo
+/store/metadata/ios/review_information/
+/store/*.local.*
