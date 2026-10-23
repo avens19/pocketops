@@ -3,18 +3,25 @@
 <title>PocketOps: a read-only SigNoz client for iOS and Android</title>
 <link rel="icon" href="/icon.png">
 <style>
-:root{color-scheme:light dark;--bg:#fff;--fg:#1b1d22;--mut:#5b616c;--acc:#c2410c}
-@media(prefers-color-scheme:dark){:root{--bg:#0e1013;--fg:#eceef1;--mut:#9aa1ad;--acc:#ff8a3d}}
+:root{color-scheme:light dark;--bg:#fff;--fg:#1b1d22;--mut:#5b616c;--acc:#c2410c;--on:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1013;--fg:#eceef1;--mut:#9aa1ad;--acc:#ff8a3d;--on:#1b1d22}}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 main{max-width:42rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
 h1{font-size:2rem;margin:.2rem 0 .5rem}h2{font-size:1.2rem;margin-top:2rem}
 a{color:var(--acc)}.mut{color:var(--mut)}nav{display:flex;gap:1.25rem;margin-bottom:2rem}
 .app{display:flex;align-items:center;gap:1rem}.app img{width:72px;height:72px;border-radius:16px}
 li{margin:.3rem 0}
+.stores{display:flex;flex-wrap:wrap;gap:.75rem;margin:1.5rem 0}
+.stores a{display:inline-block;padding:.65rem 1.1rem;border-radius:12px;background:var(--acc);color:var(--on);text-decoration:none;font-weight:600}
+.stores small{display:block;font-weight:400;font-size:.75rem;opacity:.85}
 </style></head><body><main>
 <nav><a href="/">PocketOps</a><a href="/privacy">Privacy</a><a href="/support">Support</a></nav>
 
 <div class="app"><img src="/icon.png" alt="PocketOps icon"><div><h1>PocketOps</h1><div class="mut">Alerts, logs and traces from your SigNoz, on your phone.</div></div></div>
+<p class="stores">
+<a href="https://apps.apple.com/app/id6826118344"><small>Download on the</small>App Store</a>
+<a href="https://play.google.com/store/apps/details?id=com.andrewovens.pocketops"><small>Get it on</small>Google Play</a>
+</p>
 <p>PocketOps is a read-only mobile client for <a href="https://signoz.io">SigNoz</a>. Check what is firing, search logs, and follow a slow or failing request through your services without opening a laptop.</p>
 <ul>
 <li><b>Alerts</b>: every rule by state, with firing instances and a jump to the logs or traces behind them.</li>
