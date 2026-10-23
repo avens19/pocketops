@@ -177,7 +177,7 @@ function SpanRow({ span, trace, open, collapsed, hiddenCount, onToggleOpen, onTo
       <Pressable accessibilityRole="button" accessibilityLabel={`${span.service} ${span.name}, ${formatDuration(span.durationMs)}`} accessibilityState={{ expanded: open }} onPress={onToggleOpen} style={styles.row}>
         <View style={[styles.titleLine, { paddingLeft: indent }]}>
           {span.hasChildren ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand children' : 'Collapse children'} hitSlop={10} onPress={onToggleCollapsed} style={styles.chevron}>
+            <Pressable accessibilityRole="button" accessibilityLabel={collapsed ? 'Expand children' : 'Collapse children'} hitSlop={{ top: 16, bottom: 16, left: 12, right: 12 }} onPress={onToggleCollapsed} style={styles.chevron}>
               <ThemedText type="caption">{collapsed ? '▸' : '▾'}</ThemedText>
             </Pressable>
           ) : (
