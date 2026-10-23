@@ -2,7 +2,7 @@
   "expo": {
     "name": "PocketOps",
     "slug": "pocketops",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pocketops",
@@ -23,7 +23,7 @@
         },
         "NSLocalNetworkUsageDescription": "PocketOps connects to your SigNoz server. If it runs on your local network, this lets the app reach it."
       },
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "package": "com.andrewovens.pocketops",
@@ -37,7 +37,7 @@
       "blockedPermissions": [
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
-      "versionCode": 2
+      "versionCode": 3
     },
     "plugins": [
       "expo-router",
