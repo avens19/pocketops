@@ -20,7 +20,8 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 | Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
 | Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
 | iOS | Never built (needs a Mac) |
-| Release build / R8 / `eas update` / `eas build --local` | Not run |
+| Release build / R8 | `scripts/build-android-release.sh` builds a signed APK (private keystore in `~/.pocketops`, never in the repo) |
+| `eas update` / `eas build --local` | Not run |
 
 Bugs the first real device run found, all fixed: `/` had no route (cold start landed on "Unmatched Route"; a naive redirect then
 looped with the auth guard), the web build's unbound `fetch`, time-series buckets returned out of order, aggregations returned in
@@ -70,9 +71,12 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
   EAS project named `lookout` still exists in the Expo dashboard and should be deleted there (not possible via CLI).
 - `eas.json` mirrors the owner's other app (AgCadence): channels per profile, `runtimeVersion.policy: appVersion`, local
   builds only, no cloud builders. Bump `expo.version` whenever native code or config changes.
-- `LICENSE` is the create-expo-app template's MIT notice (Expo/650 Industries). Choose the project's own license before
-  treating this as open source in any real sense.
-- `npm audit` reports 20 high-severity advisories that were never reviewed.
+- `LICENSE` is MIT, copyright Andrew Ovens (the Expo template notice was replaced).
+- `npm audit` reports 20 high-severity advisories. Triaged: they reduce to two root causes, `braces` (a denial of service on deeply
+  nested glob patterns) and `node-forge` (an RSA signature-verification flaw, used by expo-updates' CLI code signing). Both are build/CLI
+  tooling: neither, nor `metro`/`micromatch`, appears in the app's JS bundle (checked against the exported source map). The
+  "fixes" npm suggests are downgrades to expo 44 / react-native 0.72, so do not run `npm audit fix --force`. Revisit when Expo
+  ships updated tooling.
 
 ## What exists now (beyond the first handoff)
 

@@ -70,6 +70,12 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
     [plotW, tMin, tSpan, times],
   );
 
+  // A chart is a picture; this is what it says, for a screen reader.
+  const latest = series[0]?.points[series[0].points.length - 1];
+  const summary = hasData
+    ? `Line chart${series.length > 1 ? ` of ${series.length} series` : ''}. ${latest ? `Latest ${format(latest.v)}. ` : ''}Lowest ${format(vMin)}, highest ${format(vMax)}.`
+    : 'Line chart with no data in this range.';
+
   const readout = cursor === null ? [] : series.flatMap((s, i) => {
     const p = s.points.find((q) => q.t === cursor);
     return p ? [{ name: s.name, v: p.v, color: palette[i % palette.length] }] : [];
@@ -92,7 +98,7 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
           <ThemedText type="caption">{hasData ? 'Touch the chart to read a value' : ' '}</ThemedText>
         )}
       </View>
-      <View style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
+      <View accessible accessibilityRole="image" accessibilityLabel={summary} style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
         {width > 0 ? (
           <Svg width={width} height={height} pointerEvents="none">
             {gridValues.map((v, i) => (

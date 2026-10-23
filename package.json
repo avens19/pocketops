@@ -1,6 +1,7 @@
 {
   "name": "pocketops",
   "version": "1.0.0",
+  "license": "MIT",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~58.0.22",

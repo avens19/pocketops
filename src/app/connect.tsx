@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -21,6 +22,7 @@ export default function ConnectScreen() {
   const { signIn } = useAuth();
   const [endpoint, setEndpoint] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,14 @@ export default function ConnectScreen() {
       setError(e instanceof Error ? e.message : 'Could not connect.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function pasteKey() {
+    const clip = (await Clipboard.getStringAsync().catch(() => '')).trim();
+    if (clip) {
+      setApiKey(clip);
+      setError(null);
     }
   }
 
@@ -69,14 +79,33 @@ export default function ConnectScreen() {
               autoCorrect={false}
               keyboardType="url"
               textContentType="URL"
+              accessibilityLabel="SigNoz URL"
               style={inputStyle}
             />
+            <ThemedText type="caption">
+              The address you open SigNoz at. https works anywhere; plain http is only accepted for addresses on your own
+              network (like 192.168.x.x, a .local name, or Tailscale).
+            </ThemedText>
           </View>
 
           <View style={styles.field}>
-            <ThemedText type="small" style={styles.label}>
-              API key
-            </ThemedText>
+            <View style={styles.labelRow}>
+              <ThemedText type="small" style={styles.label}>
+                API key
+              </ThemedText>
+              <View style={styles.labelActions}>
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setShowKey((v) => !v)}>
+                  <ThemedText type="small" color="accent" style={styles.label}>
+                    {showKey ? 'Hide' : 'Show'}
+                  </ThemedText>
+                </Pressable>
+                <Pressable accessibilityRole="button" hitSlop={8} onPress={pasteKey}>
+                  <ThemedText type="small" color="accent" style={styles.label}>
+                    Paste
+                  </ThemedText>
+                </Pressable>
+              </View>
+            </View>
             <TextInput
               value={apiKey}
               onChangeText={setApiKey}
@@ -84,14 +113,16 @@ export default function ConnectScreen() {
               placeholderTextColor={theme.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
-              secureTextEntry
+              secureTextEntry={!showKey}
               textContentType="password"
+              accessibilityLabel="API key"
               onSubmitEditing={canSubmit ? connect : undefined}
               style={inputStyle}
             />
             <ThemedText type="caption">
-              Create one in SigNoz under Settings → Service Accounts. A Viewer-role key is enough, and it keeps this app
-              read-only. The key is stored in this device&apos;s secure storage and sent only to your server.
+              To make a key: in SigNoz open Settings → Service Accounts, create an account with the Viewer role, then add a key
+              and copy it here. A Viewer key keeps this app read-only. The key is stored in this device&apos;s secure storage
+              and sent only to your server.
             </ThemedText>
           </View>
 
@@ -130,6 +161,8 @@ const styles = StyleSheet.create({
   header: { gap: Spacing.two, marginBottom: Spacing.three },
   field: { gap: 6 },
   label: { fontWeight: '600' },
+  labelRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  labelActions: { flexDirection: 'row', gap: Spacing.three },
   input: {
     fontSize: 16,
     paddingHorizontal: Spacing.three,
