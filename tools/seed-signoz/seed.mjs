@@ -264,9 +264,12 @@ const incidentAt = (t) => { const mins = (Date.now() - t) / 60000; return mins >
 
 async function batch(from, to, perMinute) {
   for (let t = from; t < to; t += 60000) {
-    const n = Math.round(perMinute * rnd(0.7, 1.3) * (0.6 + 0.4 * Math.sin(t / 2.4e6)));
-    for (let i = 0; i < n; i++) request(t + rnd(0, 60000), { incident: incidentAt(t) });
-    for (let i = 0; i < 6; i++) background(t + rnd(0, 60000));
+    // The last step may be shorter than a minute (a live batch is ~10s): scale the volume and never stamp data after `to`,
+    // or a view bounded by "now" would not show it until the clock caught up.
+    const span = Math.min(60000, to - t);
+    const n = Math.round(perMinute * (span / 60000) * rnd(0.7, 1.3) * (0.6 + 0.4 * Math.sin(t / 2.4e6)));
+    for (let i = 0; i < n; i++) request(t + rnd(0, span), { incident: incidentAt(t) });
+    for (let i = 0; i < Math.max(1, Math.round(6 * (span / 60000))); i++) background(t + rnd(0, span));
     await metricsAt(t, { incident: incidentAt(t) });
     if (spanBuf.size > 300) { await flushTraces(); await flushLogs(); }
   }

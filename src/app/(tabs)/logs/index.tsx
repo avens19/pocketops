@@ -50,6 +50,8 @@ function LogsView({ params }: { params: LogsParams }) {
   const [live, setLive] = useState(false);
   const focused = useIsFocused();
   const appActive = useAppActive();
+  // Live pauses while the user has scrolled away from the top, so rows never shift under what they are reading.
+  const [atTop, setAtTop] = useState(true);
 
   // A link, "view logs for this service/trace" or a pasted URL arrives as params and replaces the filter. Hold the
   // first request until that has landed, so it is the right one.
@@ -84,7 +86,7 @@ function LogsView({ params }: { params: LogsParams }) {
     queryKey: ['logs-live', client.endpoint, expression, searchText, levels, 'key' in range ? range.key : JSON.stringify(range)],
     enabled: landed && live,
     queryFn: ({ signal }) => fetchLogs(client, rollingRange(range), filter, 0, signal, LIVE_LOG_LIMIT),
-    refetchInterval: live && focused && appActive ? 3000 : false,
+    refetchInterval: live && focused && appActive && atTop ? 3000 : false,
     gcTime: 60_000,
   });
 
@@ -122,8 +124,11 @@ function LogsView({ params }: { params: LogsParams }) {
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      // While live, new rows prepend without pushing what you are reading down (and follow the top when you are there).
-      maintainVisibleContentPosition={live ? { minIndexForVisible: 0, autoscrollToTopThreshold: 120 } : undefined}
+      scrollEventThrottle={100}
+      onScroll={(e) => {
+        const top = e.nativeEvent.contentOffset.y < 150;
+        if (top !== atTop) setAtTop(top);
+      }}
       contentContainerStyle={styles.list}
       // The spinner is for a pull-to-refresh; live polling refreshes quietly in the background.
       refreshControl={<RefreshControl refreshing={!live && paged.isRefetching && !paged.isFetchingNextPage} onRefresh={live ? () => void tail.refetch() : refresh} />}
@@ -136,7 +141,9 @@ function LogsView({ params }: { params: LogsParams }) {
       ListFooterComponent={
         live ? (
           <ThemedText type="caption" style={styles.liveNote}>
-            Live: the newest {LIVE_LOG_LIMIT} logs. Turn Live off to page further back.
+            {atTop
+              ? `Live: the newest ${LIVE_LOG_LIMIT} logs. Turn Live off to page further back.`
+              : 'Live is paused while you scroll. Go back to the top to resume.'}
           </ThemedText>
         ) : paged.isFetchingNextPage ? (
           <ActivityIndicator style={styles.footer} />

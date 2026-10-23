@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { AppState } from 'react-native';
+
+import { isForeground } from '@/lib/app-state';
+
+function subscribe(onChange: () => void) {
+  const sub = AppState.addEventListener('change', onChange);
+  return () => sub.remove();
+}
 
 /** True while the app is in the foreground. Polling that nobody can see should stop when it is not. */
 export function useAppActive(): boolean {
-  const [active, setActive] = useState(AppState.currentState === 'active');
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (status) => setActive(status === 'active'));
-    return () => sub.remove();
-  }, []);
-  return active;
+  return useSyncExternalStore(subscribe, () => isForeground(AppState.currentState), () => true);
 }
