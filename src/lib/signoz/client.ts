@@ -154,12 +154,13 @@ export class SignozClient {
     if (!response.ok) {
       const kind = kindForStatus(response.status);
       const fallback =
+        kind === 'forbidden' ? 'The API key does not have permission for this.' : `Request failed (${response.status}).`;
+      // The server says just "unauthenticated" for a bad key; say what the user can do about it instead.
+      const message =
         kind === 'auth'
-          ? 'The API key was rejected.'
-          : kind === 'forbidden'
-            ? 'The API key does not have permission for this.'
-            : `Request failed (${response.status}).`;
-      throw new SignozError(messageFromBody(json) ?? fallback, kind, response.status);
+          ? 'The API key was rejected. Check that it is a service-account key and has not been revoked or expired.'
+          : (messageFromBody(json) ?? fallback);
+      throw new SignozError(message, kind, response.status);
     }
 
     if (json === undefined) {

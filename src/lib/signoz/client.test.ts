@@ -60,9 +60,9 @@ describe('SignozClient', () => {
     expect((calls[0]!.init.headers as Record<string, string>)['SIGNOZ-API-KEY']).toBe('k');
   });
 
-  it('maps 401 to an auth error', async () => {
+  it('maps 401 to an auth error with an actionable message, not the server\'s one-word reply', async () => {
     const { impl } = fakeFetch({ '/x': { status: 401, body: { status: 'error', error: { message: 'bad key' } } } });
-    await expect(new SignozClient(creds, impl).request('/x')).rejects.toMatchObject({ kind: 'auth', message: 'bad key' });
+    await expect(new SignozClient(creds, impl).request('/x')).rejects.toMatchObject({ kind: 'auth', message: expect.stringContaining('API key was rejected') });
   });
 
   it('treats a non-JSON 200 as the wrong server', async () => {
