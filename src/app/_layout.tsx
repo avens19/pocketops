@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
 import { ConnectionBanner } from '@/components/connection-banner';
+import { UpdateReadyBanner } from '@/components/update-ready-banner';
+import { startUpdateChecks } from '@/hooks/use-update-status';
 import { useTheme } from '@/hooks/use-theme';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { watchConnection } from '@/lib/connection';
@@ -17,6 +19,8 @@ export default function RootLayout() {
   const scheme = useColorScheme();
   useEffect(setupFocusManager, []);
   useEffect(watchConnection, []);
+  // Not gated on a session: a phone on the connect screen should pick up newer code like any other.
+  useEffect(startUpdateChecks, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -66,6 +70,7 @@ function Navigator() {
         </Stack.Protected>
       </Stack>
       {signedIn ? <ConnectionBanner /> : null}
+      <UpdateReadyBanner />
     </>
   );
 }
