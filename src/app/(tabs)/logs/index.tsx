@@ -1,5 +1,5 @@
-import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
-import { Link, useLocalSearchParams } from 'expo-router';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { Link, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -11,6 +11,7 @@ import { SearchField } from '@/components/search-field';
 import { severityColor } from '@/components/severity';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { useAppActive } from '@/hooks/use-app-active';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useWindowAnchor } from '@/hooks/use-window-anchor';
 import { useTheme } from '@/hooks/use-theme';
@@ -18,11 +19,12 @@ import { useClient } from '@/lib/auth';
 import { explorer, useExplorer } from '@/lib/explorer-state';
 import { clausesToExpression } from '@/lib/filters';
 import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
-import { LOG_PAGE_SIZE, fetchLogs } from '@/lib/signoz/api';
+import { LIVE_LOG_LIMIT, LOG_PAGE_SIZE, fetchLogs } from '@/lib/signoz/api';
 import {
   LOG_LEVELS,
   rangeSpecFromParams,
   resolveRange,
+  rollingRange,
   type LogFilter,
   type LogLevel,
   type RangeSpec,
@@ -46,7 +48,8 @@ function LogsView({ params }: { params: LogsParams }) {
   const { clauses, text, sig } = useExplorer('logs');
   const [levels, setLevels] = useState<LogLevel[]>([]);
   const [live, setLive] = useState(false);
-  const [atTop, setAtTop] = useState(true);
+  const focused = useIsFocused();
+  const appActive = useAppActive();
 
   // A link, "view logs for this service/trace" or a pasted URL arrives as params and replaces the filter. Hold the
   // first request until that has landed, so it is the right one.
@@ -60,29 +63,33 @@ function LogsView({ params }: { params: LogsParams }) {
   const searchText = useDebounced(text.trim(), 400);
   const filter: LogFilter = { text: searchText, expression, levels };
 
-  // The window end is fixed per query so paging by offset is not disturbed by logs arriving meanwhile.
-  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, expression, searchText, levels]));
+  // The window end is fixed per query so paging by offset is not disturbed by logs arriving meanwhile. Turning Live on or off
+  // moves it, so leaving Live shows fresh rows rather than the window from before.
+  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, expression, searchText, levels, live]));
   const resolved = resolveRange(range, anchor);
 
-  // Live tail: move the window to now every few seconds, but only while the user is at the top, so scrolling back through
-  // history is never yanked away. The previous rows stay on screen until the next page lands.
-  useEffect(() => {
-    if (!live || !atTop) return;
-    const timer = setInterval(refresh, 3000);
-    return () => clearInterval(timer);
-  }, [live, atTop, refresh]);
-
-  const logs = useInfiniteQuery({
+  const paged = useInfiniteQuery({
     queryKey: ['logs', client.endpoint, range, anchor, filter],
-    enabled: landed,
+    enabled: landed && !live,
     initialPageParam: 0,
     queryFn: ({ pageParam, signal }) => fetchLogs(client, resolved, filter, pageParam, signal),
     getNextPageParam: (last, all) => (last.length === LOG_PAGE_SIZE ? all.length * LOG_PAGE_SIZE : undefined),
     gcTime: 60_000,
-    placeholderData: live ? keepPreviousData : undefined,
   });
 
-  const rows = useMemo(() => logs.data?.pages.flat() ?? [], [logs.data]);
+  // Live tail is its own query with a stable key: the newest rows, refetched on a timer. Keeping the key fixed means a refresh
+  // never cancels the one before it (a slow server would otherwise starve it), a failed refresh keeps the rows on screen, and
+  // there are no pages to lose. The timer only runs while this screen is showing and the app is in the foreground.
+  const tail = useQuery({
+    queryKey: ['logs-live', client.endpoint, expression, searchText, levels, 'key' in range ? range.key : JSON.stringify(range)],
+    enabled: landed && live,
+    queryFn: ({ signal }) => fetchLogs(client, rollingRange(range), filter, 0, signal, LIVE_LOG_LIMIT),
+    refetchInterval: live && focused && appActive ? 3000 : false,
+    gcTime: 60_000,
+  });
+
+  const source = live ? tail : paged;
+  const rows = useMemo(() => (live ? (tail.data ?? []) : (paged.data?.pages.flat() ?? [])), [live, tail.data, paged.data]);
   const toggleLevel = (l: LogLevel) => setLevels((cur) => (cur.includes(l) ? cur.filter((x) => x !== l) : [...cur, l]));
 
   const header = (
@@ -104,8 +111,8 @@ function LogsView({ params }: { params: LogsParams }) {
   );
 
   let body: React.ReactNode = null;
-  if (!landed || logs.isPending) body = <Loading />;
-  else if (logs.isError && rows.length === 0) body = <ErrorState error={logs.error} onRetry={() => logs.refetch()} />;
+  if (!landed || source.isPending) body = <Loading />;
+  else if (source.isError && rows.length === 0) body = <ErrorState error={source.error} onRetry={() => source.refetch()} />;
   else if (rows.length === 0) body = <Empty title="No logs found" hint="Try a wider time range or fewer filters." />;
 
   return (
@@ -115,25 +122,28 @@ function LogsView({ params }: { params: LogsParams }) {
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      scrollEventThrottle={100}
-      onScroll={(e) => {
-        const top = e.nativeEvent.contentOffset.y < 120;
-        if (top !== atTop) setAtTop(top);
-      }}
-      // While live and at the top, new rows prepend without pushing what you are reading down.
+      // While live, new rows prepend without pushing what you are reading down (and follow the top when you are there).
       maintainVisibleContentPosition={live ? { minIndexForVisible: 0, autoscrollToTopThreshold: 120 } : undefined}
       contentContainerStyle={styles.list}
       // The spinner is for a pull-to-refresh; live polling refreshes quietly in the background.
-      refreshControl={<RefreshControl refreshing={!live && logs.isRefetching && !logs.isFetchingNextPage} onRefresh={refresh} />}
+      refreshControl={<RefreshControl refreshing={!live && paged.isRefetching && !paged.isFetchingNextPage} onRefresh={live ? () => void tail.refetch() : refresh} />}
       ListHeaderComponent={
         <>
           {header}
           {body}
         </>
       }
-      ListFooterComponent={logs.isFetchingNextPage ? <ActivityIndicator style={styles.footer} /> : undefined}
+      ListFooterComponent={
+        live ? (
+          <ThemedText type="caption" style={styles.liveNote}>
+            Live: the newest {LIVE_LOG_LIMIT} logs. Turn Live off to page further back.
+          </ThemedText>
+        ) : paged.isFetchingNextPage ? (
+          <ActivityIndicator style={styles.footer} />
+        ) : undefined
+      }
       onEndReachedThreshold={0.5}
-      onEndReached={() => logs.hasNextPage && !logs.isFetchingNextPage && logs.fetchNextPage()}
+      onEndReached={() => !live && paged.hasNextPage && !paged.isFetchingNextPage && paged.fetchNextPage()}
       ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.border }]} />}
       renderItem={({ item }) => <LogLine row={item} />}
     />
@@ -176,6 +186,7 @@ const styles = StyleSheet.create({
   header: { padding: Spacing.three, gap: Spacing.two },
   chips: { gap: Spacing.two },
   footer: { padding: Spacing.three },
+  liveNote: { textAlign: 'center', padding: Spacing.three },
   separator: { height: StyleSheet.hairlineWidth, marginLeft: Spacing.three },
   line: { flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: Spacing.two },
   bar: { width: 3, borderRadius: 2 },

@@ -15,7 +15,7 @@ attributes**, and translate SigNoz web UI features to mobile as needed. They are
 
 | Thing | State |
 |---|---|
-| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (139 tests) |
+| tsc, `expo lint` (React Compiler rules on), unit tests | Pass (146 tests) |
 | Android debug build | Builds and runs (Gradle 9.4, SDK 37, NDK 27) |
 | Running on a device | Walked every screen on an API 36 emulator, light and dark, against a local SigNoz v0.146 with seeded data |
 | Against a real SigNoz | Local Docker instance only (see README). Not yet against a production-sized instance |
@@ -88,7 +88,7 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
 - **Alerts**: firing instances link to the logs/traces behind them, filtered by the rule's query plus the instance's labels.
 - **Charts**: axis, gridlines, time labels, touch-scrub readout.
 - **Group by** on Traces: spans, errors and p99 per value of a field; tap a row to drill into those spans.
-- **Live tail** on Logs (refreshes every 3s while at the top of the list) and **Copy as JSON** on a log.
+- **Live tail** on Logs (its own stable-key query of the newest 200 logs, refetched every 3s only while the screen is focused and the app is in the foreground; verified against a 5s-latency server) and **Copy as JSON** on a log.
 - **Connection banner** (`lib/connection*.ts`, `ConnectionBanner`): screens keep their last data when a refresh fails, which looks
   healthy; a global banner says when requests are failing (unreachable / server error / key rejected) and how old the data is.
 

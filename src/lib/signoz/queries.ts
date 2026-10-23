@@ -40,6 +40,15 @@ export function rangeSpecFromParams(p: { last?: string; from?: string; to?: stri
   return preset ? { key: preset.key } : { lastMs: last };
 }
 
+/**
+ * The window for a live view: a preset or a duration ends now, and so does a fixed window (from a pasted link) of the same
+ * length. Otherwise "Live" on a link with absolute bounds would keep asking for the same stretch of history.
+ */
+export function rollingRange(spec: RangeSpec, now = Date.now()): TimeRange {
+  if ('startMs' in spec) return { startMs: now - (spec.endMs - spec.startMs), endMs: now };
+  return resolveRange(spec, now);
+}
+
 export function describeRange(spec: RangeSpec): string {
   if ('key' in spec) return `Last ${spec.key}`;
   if ('lastMs' in spec) {
@@ -394,6 +403,33 @@ export function parseScalarRows(resp: QueryRangeData | undefined, aliases: strin
       out[aggKeyByColumn.get(i) ?? c.name] = row[i];
     });
     return out;
+  });
+}
+
+export interface GroupedRow {
+  /** Grouping columns by field name, with the types and nulls the server sent. */
+  groups: Record<string, unknown>;
+  /** Aggregation columns by the alias asked for. A separate namespace: a field called `errors` must not collide with the stat. */
+  stats: Record<string, unknown>;
+}
+
+/** Scalar results with group-by, kept apart so a grouping field can never be overwritten by an aggregation of the same name. */
+export function parseGroupedRows(resp: QueryRangeData | undefined, aliases: string[] = []): GroupedRow[] {
+  const result = firstResult(resp);
+  const columns = result?.columns;
+  const data = result?.data;
+  if (!Array.isArray(columns) || !Array.isArray(data)) return [];
+  const cols = columns as Column[];
+  return (data as unknown[][]).map((row) => {
+    const groups: Record<string, unknown> = {};
+    const stats: Record<string, unknown> = {};
+    cols.forEach((c, i) => {
+      if (c.columnType === 'aggregation') {
+        const n = c.aggregationIndex ?? 0;
+        stats[aliases[n] ?? `agg${n}`] = row[i];
+      } else groups[c.name] = row[i];
+    });
+    return { groups, stats };
   });
 }
 

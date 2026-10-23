@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
-import { OK, nextStatus, type ConnectionStatus } from './connection-status';
+import { OK, isRecoverable, nextStatus, type ConnectionStatus } from './connection-status';
 import { queryClient } from './query';
 
 export type { ConnectionStatus };
@@ -26,8 +26,9 @@ export function watchConnection(): () => void {
     if (action.type === 'success') {
       const wasFailing = status.failing;
       set(nextStatus(status, { type: 'success' }, Date.now()));
-      // Back online: screens that gave up while it was down would sit on their error until tapped. Retry them now, once.
-      if (wasFailing && !status.failing) void queryClient.refetchQueries({ predicate: (q) => q.state.status === 'error' });
+      // Back online: screens that gave up while it was down would sit on their error until tapped. Retry the ones on screen whose
+      // failure a retry can fix, once; stale or permanently failing queries (a bad filter) stay as they are.
+      if (wasFailing && !status.failing) void queryClient.refetchQueries({ predicate: (q) => q.getObserversCount() > 0 && q.state.status === 'error' && isRecoverable(q.state.error) });
     } else if (action.type === 'error') set(nextStatus(status, { type: 'error', error: action.error }, Date.now()));
   });
 }

@@ -9,6 +9,7 @@ import {
   logsQuery,
   metricSeriesQuery,
   type MetricGroup,
+  parseGroupedRows,
   parseRawRows,
   parseScalarRows,
   parseTimeSeries,
@@ -208,6 +209,8 @@ export function toLogRow(row: RawRow): LogRow {
 }
 
 export const LOG_PAGE_SIZE = 50;
+/** How many of the newest logs the live view keeps on screen. */
+export const LIVE_LOG_LIMIT = 200;
 
 export async function fetchLogs(
   client: SignozClient,
@@ -215,8 +218,9 @@ export async function fetchLogs(
   filter: LogFilter,
   offset: number,
   signal?: AbortSignal,
+  limit = LOG_PAGE_SIZE,
 ): Promise<LogRow[]> {
-  const resp = await queryRange(client, logsQuery(range, filter, LOG_PAGE_SIZE, offset), signal);
+  const resp = await queryRange(client, logsQuery(range, filter, limit, offset), signal);
   return parseRawRows(resp).map(toLogRow);
 }
 
@@ -315,8 +319,13 @@ export async function fetchErrorSpans(
   }));
 }
 
+/** A grouping value as the server typed it; null (or empty) means the span has no such attribute. */
+export type GroupValue = string | number | boolean | null;
+
 export interface SpanGroup {
-  /** Values of the grouping attributes, in the order they were requested. */
+  /** Typed values of the grouping fields, in the order they were requested. */
+  values: GroupValue[];
+  /** The same, as display text (a missing value is empty). */
   labels: string[];
   count: number;
   errors: number;
@@ -326,6 +335,11 @@ export interface SpanGroup {
 
 const GROUP_STATS = ['count', 'errors', 'p99'];
 
+function asGroupValue(v: unknown): GroupValue {
+  if (v === null || v === undefined || v === '') return null;
+  return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? v : String(v);
+}
+
 export async function fetchSpanGroups(
   client: SignozClient,
   range: TimeRange,
@@ -334,13 +348,17 @@ export async function fetchSpanGroups(
   signal?: AbortSignal,
 ): Promise<SpanGroup[]> {
   const resp = await queryRange(client, spanGroupsQuery(range, expression, groupBy), signal);
-  return parseScalarRows(resp, GROUP_STATS).map((r) => ({
+  return parseGroupedRows(resp, GROUP_STATS).map(({ groups, stats }) => {
     // Group columns come back keyed by field name; ask for them in the order requested.
-    labels: groupBy.map((name) => (r[name] === null || r[name] === undefined ? '' : String(r[name]))),
-    count: num(r.count),
-    errors: num(r.errors),
-    p99Ms: num(r.p99) / 1e6,
-  }));
+    const values = groupBy.map((name) => asGroupValue(groups[name]));
+    return {
+      values,
+      labels: values.map((v) => (v === null ? '' : String(v))),
+      count: num(stats.count),
+      errors: num(stats.errors),
+      p99Ms: num(stats.p99) / 1e6,
+    };
+  });
 }
 
 export interface SpanRow {

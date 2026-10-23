@@ -18,9 +18,9 @@ import { useWindowAnchor } from '@/hooks/use-window-anchor';
 import { useClient } from '@/lib/auth';
 import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
 import { explorer, useExplorer } from '@/lib/explorer-state';
-import { clausesToExpression, inferValue } from '@/lib/filters';
+import { clausesToExpression } from '@/lib/filters';
 import { formatCount, formatDuration } from '@/lib/format';
-import { SPAN_PAGE_SIZE, fetchSpanGroups, fetchSpans, type SpanRow } from '@/lib/signoz/api';
+import { SPAN_PAGE_SIZE, fetchSpanGroups, fetchSpans, type GroupValue, type SpanRow } from '@/lib/signoz/api';
 import { quote, rangeSpecFromParams, resolveRange, type RangeSpec, type SpanSort } from '@/lib/signoz/queries';
 import { serviceColor } from '@/lib/trace';
 
@@ -76,10 +76,14 @@ function TracesView({ params }: { params: TracesParams }) {
 
   const rows = useMemo(() => spans.data?.pages.flat() ?? [], [spans.data]);
 
-  /** Tapping a group shows its spans: one clause per grouping field, skipping empty values. */
-  function drillInto(labels: string[]) {
+  /**
+   * Tapping a group shows its spans: one clause per grouping field. A missing value becomes "does not exist", not a skipped clause
+   * (which would silently widen the result), and values keep the type the server gave them (the string "123" stays a string).
+   */
+  function drillInto(values: GroupValue[]) {
     groupBy.forEach((key, i) => {
-      if (labels[i]) explorer.investigate('traces', { kind: 'filter', key, op: '=', value: inferValue(labels[i]) });
+      const v = values[i];
+      explorer.investigate('traces', v === null ? { kind: 'filter', key, op: 'NOT EXISTS' } : { kind: 'filter', key, op: '=', value: v });
     });
     explorer.setGroupBy('traces', []);
   }
@@ -132,8 +136,8 @@ function TracesView({ params }: { params: TracesParams }) {
                 <Pressable
                   key={`${g.labels.join('|')}-${i}`}
                   accessibilityRole="button"
-                  accessibilityLabel={`${g.labels.join(' ')}: ${g.count} spans, ${g.errors} errors. Show them`}
-                  onPress={() => drillInto(g.labels)}
+                  accessibilityLabel={`${groupBy.map((key, i) => `${key} ${g.values[i] === null ? 'not set' : g.labels[i]}`).join(', ')}: ${g.count} spans, ${g.errors} errors, p99 ${formatDuration(g.p99Ms)}. Show them`}
+                  onPress={() => drillInto(g.values)}
                   style={styles.groupRow}>
                   <ThemedText type="small" numberOfLines={2} style={styles.flex}>
                     {g.labels.map((l) => l || '(none)').join(' · ')}

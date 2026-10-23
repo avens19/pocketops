@@ -24,3 +24,8 @@ export function nextStatus(status: ConnectionStatus, outcome: { type: 'success' 
   if (!(e instanceof SignozError) || !CONNECTION_KINDS.includes(e.kind)) return status;
   return status.failing && status.kind === e.kind ? status : { ...status, failing: true, kind: e.kind };
 }
+
+/** Whether trying again could fix this failure. A rejected key, a bad filter or a missing endpoint will fail the same way. */
+export function isRecoverable(error: unknown): boolean {
+  return error instanceof SignozError && (error.kind === 'network' || error.kind === 'server');
+}

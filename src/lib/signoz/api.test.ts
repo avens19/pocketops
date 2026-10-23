@@ -178,8 +178,8 @@ describe('fetchSpanGroups', () => {
       '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns, data: [['/api/cart', 70_000_000, 3200, 45], [null, 1_000_000, 5, 0]] }] } },
     });
     expect(await fetchSpanGroups(client, range, '', ['http.route'])).toEqual([
-      { labels: ['/api/cart'], count: 3200, errors: 45, p99Ms: 70 },
-      { labels: [''], count: 5, errors: 0, p99Ms: 1 },
+      { values: ['/api/cart'], labels: ['/api/cart'], count: 3200, errors: 45, p99Ms: 70 },
+      { values: [null], labels: [''], count: 5, errors: 0, p99Ms: 1 },
     ]);
   });
 
@@ -193,5 +193,31 @@ describe('fetchSpanGroups', () => {
     ];
     const { client } = clientFor({ '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns: cols, data: [['B1', 'A1', 7, 1, 2_000_000]] }] } } });
     expect((await fetchSpanGroups(client, range, '', ['a', 'b']))[0].labels).toEqual(['A1', 'B1']);
+  });
+
+  it('keeps a grouping field apart from an aggregation of the same name', async () => {
+    const cols = [
+      { name: 'errors', columnType: 'group', aggregationIndex: 0 },
+      { name: '__result_0', columnType: 'aggregation', aggregationIndex: 0 },
+      { name: '__result_1', columnType: 'aggregation', aggregationIndex: 1 },
+      { name: '__result_2', columnType: 'aggregation', aggregationIndex: 2 },
+    ];
+    const { client } = clientFor({ '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns: cols, data: [['payment', 9, 3, 1_000_000]] }] } } });
+    const [g] = await fetchSpanGroups(client, range, '', ['errors']);
+    expect(g.values).toEqual(['payment']);
+    expect(g.errors).toBe(3);
+  });
+
+  it('keeps the types the server sent, so a string "123" is not a number', async () => {
+    const cols = [
+      { name: 'a', columnType: 'group', aggregationIndex: 0 },
+      { name: 'b', columnType: 'group', aggregationIndex: 0 },
+      { name: 'c', columnType: 'group', aggregationIndex: 0 },
+      { name: '__result_0', columnType: 'aggregation', aggregationIndex: 0 },
+      { name: '__result_1', columnType: 'aggregation', aggregationIndex: 1 },
+      { name: '__result_2', columnType: 'aggregation', aggregationIndex: 2 },
+    ];
+    const { client } = clientFor({ '/api/v5/query_range': { type: 'scalar', data: { results: [{ columns: cols, data: [['123', 123, true, 1, 0, 0]] }] } } });
+    expect((await fetchSpanGroups(client, range, '', ['a', 'b', 'c']))[0].values).toEqual(['123', 123, true]);
   });
 });

@@ -40,10 +40,12 @@ function Banner() {
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { top: insets.top + Spacing.one }]}>
+      {/* The status is announced from here; the pill below is the control. */}
+      <View accessible accessibilityLiveRegion="polite" accessibilityLabel={`${title}. ${detail}`} style={styles.announce} />
       <Pressable
-        accessibilityRole="alert"
-        accessibilityLiveRegion="polite"
+        accessibilityRole="button"
         accessibilityLabel={`${title}. ${detail}`}
+        accessibilityHint={auth ? 'Opens Settings' : 'Retries the failed requests'}
         onPress={() => (auth ? router.push('/settings') : retryConnection())}
         style={[styles.pill, { backgroundColor: theme.card, borderColor: theme.danger }]}>
         <View style={[styles.dot, { backgroundColor: theme.danger }]} />
@@ -74,6 +76,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
   },
+  announce: { position: 'absolute', width: 1, height: 1, opacity: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
   text: { flexShrink: 1 },
   title: { fontWeight: '700' },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { logFilterExpression, metricAggregations, metricSeriesQuery, parseRawRows, parseScalarRows, parseTimeSeries, quote, spanGroupsQuery, spanListQuery, stepSeconds } from './queries';
+import { logFilterExpression, metricAggregations, metricSeriesQuery, parseGroupedRows, parseRawRows, parseScalarRows, rollingRange, parseTimeSeries, quote, spanGroupsQuery, spanListQuery, stepSeconds } from './queries';
 
 describe('quote', () => {
   it('escapes quotes and backslashes', () => {
@@ -183,5 +183,42 @@ describe('metric aggregations', () => {
   it('groups by a label in the context it lives in', () => {
     expect(agg('gauge', { groupBy: { name: 'http.response.status_class', context: 'attribute' } }).groupBy).toEqual([{ name: 'http.response.status_class', fieldContext: 'attribute' }]);
     expect(agg('gauge', { groupBy: { name: 'service.name', context: '' } }).groupBy).toEqual([{ name: 'service.name', fieldContext: 'resource' }]);
+  });
+});
+
+describe('rollingRange', () => {
+  const now = 1_000_000_000;
+  it('ends a preset or duration now', () => {
+    expect(rollingRange({ key: '1h' }, now)).toEqual({ startMs: now - 3_600_000, endMs: now });
+    expect(rollingRange({ lastMs: 90_000 }, now)).toEqual({ startMs: now - 90_000, endMs: now });
+  });
+  it('slides a fixed window of the same length up to now, so Live on a pasted link actually tails', () => {
+    expect(rollingRange({ startMs: 5_000, endMs: 305_000 }, now)).toEqual({ startMs: now - 300_000, endMs: now });
+  });
+});
+
+describe('parseGroupedRows', () => {
+  it('keeps group columns and aggregation columns in separate namespaces', () => {
+    const rows = parseGroupedRows(
+      {
+        data: {
+          results: [
+            {
+              columns: [
+                { name: 'errors', columnType: 'group' },
+                { name: '__result_1', columnType: 'aggregation', aggregationIndex: 1 },
+                { name: '__result_0', columnType: 'aggregation', aggregationIndex: 0 },
+              ],
+              data: [['payment', 3, 9]],
+            },
+          ],
+        },
+      },
+      ['count', 'errors'],
+    );
+    expect(rows).toEqual([{ groups: { errors: 'payment' }, stats: { errors: 3, count: 9 } }]);
+  });
+  it('is empty for no result', () => {
+    expect(parseGroupedRows(undefined)).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { nextStatus, type ConnectionStatus } from './connection-status';
+import { isRecoverable, nextStatus, type ConnectionStatus } from './connection-status';
 import { SignozError } from './signoz/client';
 
 const ok: ConnectionStatus = { failing: false, lastOkAt: 1000 };
@@ -40,5 +40,17 @@ describe('nextStatus', () => {
   it('switches the reason when the failure changes', () => {
     const failing = nextStatus(ok, fail('network'), 2000);
     expect(nextStatus(failing, fail('auth'), 2100)).toMatchObject({ failing: true, kind: 'auth' });
+  });
+});
+
+describe('isRecoverable', () => {
+  it('retries what a retry can fix, and nothing else', () => {
+    expect(isRecoverable(new SignozError('x', 'network'))).toBe(true);
+    expect(isRecoverable(new SignozError('x', 'server'))).toBe(true);
+    for (const kind of ['auth', 'forbidden', 'not-found', 'bad-request', 'unknown'] as const) {
+      expect(isRecoverable(new SignozError('x', kind))).toBe(false);
+    }
+    expect(isRecoverable(new Error('boom'))).toBe(false);
+    expect(isRecoverable(undefined)).toBe(false);
   });
 });
