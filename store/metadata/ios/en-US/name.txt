@@ -1,1 +1,1 @@
-PocketOps
+PocketOps for SigNoz

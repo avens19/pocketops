@@ -7,17 +7,16 @@ to are in `store/site/` and are served from `https://pocketops.andrewovens.com`.
 Version `1.0.0`, iOS build number `1`, Android `versionCode` `1` (bump `expo.android.versionCode` and `expo.ios.buildNumber` in
 `app.json` for every upload).
 
-## Status (22 Oct 2026)
+## Status (23 Oct 2026)
 
 | | Android | iOS |
 |---|---|---|
-| Release artifact | Done: `dist/pocketops-1.0.0-1.aab`, signed with the upload key, installed from the bundle on an API 36 emulator | **Not built**: Xcode on this Mac has no Apple account signed in, and the App Store Connect API key cannot register the bundle ID or create signing assets |
+| Release artifact | Done: signed AAB (GitHub release `v1.0.0-build1`), uploaded to Play as a draft production release, versionCode 1 | Done: build 1.0.0 (1) signed with Apple Distribution, uploaded with `altool`, attached to version 1.0 |
 | Listing text, graphics, screenshots | Done | Done |
 | Privacy policy, support page | Live | Live |
-| App record in the console | **Not created**: the Play API reports "Package not found" | **Not created**: App Store Connect has no app for `com.andrewovens.pocketops` |
+| App record in the console | Created. Listing, graphics and contact details set through the API, console-only forms done by hand. **Submitted for review** | Created (Apple ID 6826118344, primary locale en-CA). Listing, screenshots, age rating, pricing and availability set through the API; review contact and App Privacy done in the console. **Submitted for review** |
 
-What needs you: create both app records by hand, and sign in to Xcode (Settings, Accounts) so the archive command below can create the
-distribution certificate, App ID and profile.
+Both stores are submitted for review. When either listing goes live its link on the landing page (`store/site/index.html`) starts working.
 
 ## Identity
 
@@ -87,9 +86,10 @@ Artifact: an App Store archive of `ios/` (see "Build" below). **Not done yet: si
 ```bash
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 npx expo prebuild --platform ios --clean
+# Archive unsigned: signing at archive time wants a development profile, which needs a registered device.
+# The export step signs for distribution and needs no device.
 xcodebuild -workspace ios/PocketOps.xcworkspace -scheme PocketOps -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath dist/PocketOps.xcarchive \
-  DEVELOPMENT_TEAM=YZGA278893 -allowProvisioningUpdates archive
+  -destination 'generic/platform=iOS' -archivePath dist/PocketOps.xcarchive CODE_SIGNING_ALLOWED=NO archive
 xcodebuild -exportArchive -archivePath dist/PocketOps.xcarchive -exportPath dist/ipa \
   -exportOptionsPlist store/ExportOptions.plist -allowProvisioningUpdates
 xcrun altool --upload-app -f dist/ipa/PocketOps.ipa -t ios --apiKey <key id> --apiIssuer <issuer id>

@@ -1,1 +1,1 @@
-SigNoz alerts, logs and traces
+Read-only alerts, logs, traces
