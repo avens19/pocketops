@@ -1,0 +1,1 @@
+Check alerts, search logs and follow a slow request through your services, from your phone. Read-only, with your key kept in the device keychain.

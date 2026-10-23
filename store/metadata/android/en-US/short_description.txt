@@ -1,0 +1,1 @@
+Read-only SigNoz client: check alerts, search logs and follow traces on the go.

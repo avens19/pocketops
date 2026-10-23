@@ -1,0 +1,38 @@
+PocketOps is a read-only mobile client for SigNoz, the open-source observability platform. When something pages you away from your desk, it gets you from "what is firing?" to "which request failed?" without opening a laptop.
+
+Connect with your SigNoz URL and a service-account API key (the Viewer role is enough). There is no account to create and no sign-in with us: the app talks directly to your server.
+
+ALERTS
+• Every rule, grouped by state: firing, pending, inactive and disabled
+• See the firing instances and when each one started
+• Jump from an alert straight to the logs or traces behind it, already filtered by the rule's query and the instance's labels
+
+LOGS
+• Search, filter by severity and service, and page back through history
+• Live tail that keeps the newest logs coming in
+• Structured JSON logs read properly: the message first, a few key fields on a quieter line, and every field tappable
+• Copy any log as JSON
+
+TRACES
+• Root spans by default, with Errors and Slowest views
+• Group by any field to see spans, errors and p99 per value
+• A waterfall for each trace with collapsible subtrees and a "jump to failure" shortcut
+• Span details with attributes and exception events
+
+SERVICES AND METRICS
+• Calls, errors and p99 latency for every service, with charts you can scrub with a finger
+• Browse metrics, pick the aggregation, and split by the metric's own labels, with values shown in the right units
+
+FILTERS WHERE YOU NEED THEM
+Tap any attribute, on a log or a span, to show only that value, hide it, look at the same value in the other signal, or copy it. Filters appear as chips with autocomplete for keys and values taken from your own data.
+
+MADE FOR PHONES
+• Light and dark appearance
+• A banner tells you when requests are failing and how old the data on screen is, so stale data never looks healthy
+• Paste a SigNoz link and PocketOps opens the matching screen
+• Charts include a spoken summary for VoiceOver
+
+PRIVATE BY DESIGN
+PocketOps never contacts us. Your server address and API key are stored in the device keychain, requests go only to the server you enter, and the app contains no analytics or advertising. It cannot change anything on your server.
+
+PocketOps is an independent app and is not affiliated with or endorsed by SigNoz.

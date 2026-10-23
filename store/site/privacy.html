@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PocketOps privacy policy</title>
+<link rel="icon" href="/icon.png">
+<style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1b1d22;--mut:#5b616c;--acc:#c2410c}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1013;--fg:#eceef1;--mut:#9aa1ad;--acc:#ff8a3d}}
+body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:42rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
+h1{font-size:2rem;margin:.2rem 0 .5rem}h2{font-size:1.2rem;margin-top:2rem}
+a{color:var(--acc)}.mut{color:var(--mut)}nav{display:flex;gap:1.25rem;margin-bottom:2rem}
+.app{display:flex;align-items:center;gap:1rem}.app img{width:72px;height:72px;border-radius:16px}
+li{margin:.3rem 0}
+</style></head><body><main>
+<nav><a href="/">PocketOps</a><a href="/privacy">Privacy</a><a href="/support">Support</a></nav>
+
+<h1>PocketOps privacy policy</h1>
+<p class="mut">Last updated: 22 October 2026</p>
+<p>PocketOps is a read-only mobile client for <a href="https://signoz.io">SigNoz</a>, written by Andrew Ovens. This policy explains what the app does with your data. The short version: it does not send anything to me.</p>
+<h2>What the app stores on your device</h2>
+<ul>
+<li>The address of your SigNoz server and the service-account API key you enter. They are kept in the iOS Keychain or the Android Keystore (through the operating system's secure storage) and are removed when you tap Disconnect in Settings or uninstall the app.</li>
+<li>Nothing else is saved. Filters and query results are held in memory only while the app is running.</li>
+</ul>
+<h2>What the app sends, and where</h2>
+<ul>
+<li><b>To your SigNoz server.</b> The app sends your API key and queries (for alerts, logs, traces, services and metrics) to the server address you entered, and shows what it returns. That server is run by you or your organisation, and its own privacy practices apply. I never receive this traffic, the key, or the data it returns.</li>
+<li><b>To Expo, for app updates.</b> The app checks Expo's update service (<code>u.expo.dev</code>) for newer versions of its own code. That request contains the app's version, your operating system, the app's project identifier and a random token that tells the service whether this installation has already asked. It contains none of your SigNoz data. Expo's handling of those requests is described at <a href="https://expo.dev/privacy-explained">expo.dev/privacy-explained</a>.</li>
+<li><b>To the app store</b> that distributed the app, as part of installing and updating it. Apple and Google handle that under their own policies.</li>
+</ul>
+<h2>What the app does not do</h2>
+<ul>
+<li>It has no advertising, no analytics, no crash reporting and no third-party tracking.</li>
+<li>It does not collect your name, email address, location, contacts, photos or any other personal information.</li>
+<li>It cannot change anything on your SigNoz server. A key with the Viewer role is enough, and I recommend using one.</li>
+</ul>
+<h2>Clipboard and local network</h2>
+<ul>
+<li>The app reads the clipboard only when you tap "Paste" for the API key or the link box.</li>
+<li>On iOS you may be asked to allow access to your local network. That is only so the app can reach a SigNoz server on your own network.</li>
+</ul>
+<h2>Children</h2>
+<p>The app is a tool for people who operate software systems and is not directed at children.</p>
+<h2>Changes and contact</h2>
+<p>If this policy changes, the new version will be published at this address with a new date. Questions: open an issue at <a href="https://github.com/avens19/pocketops/issues">github.com/avens19/pocketops/issues</a>.</p>
+</main></body></html>
