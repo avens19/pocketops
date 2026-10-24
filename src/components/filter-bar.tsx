@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { FilterEditor, QueryEditor } from '@/components/filter-editor';
@@ -22,9 +22,30 @@ export function FilterBar({ signal, range }: FilterBarProps) {
   const [editing, setEditing] = useState<{ index: number | null } | null>(null);
   const [queryOpen, setQueryOpen] = useState(false);
 
+  // Android keeps the old scroll offset when the content gets shorter (removing a chip), leaving the row scrolled past its end and
+  // showing nothing. Pull the offset back inside the new bounds.
+  const scroller = useRef<ComponentRef<typeof ScrollView>>(null);
+  const offset = useRef(0);
+  const viewport = useRef(0);
+
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.row}>
+      <ScrollView
+        ref={scroller}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.row}
+        scrollEventThrottle={16}
+        onScroll={(e) => (offset.current = e.nativeEvent.contentOffset.x)}
+        onLayout={(e) => (viewport.current = e.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => {
+          const max = Math.max(0, width - viewport.current);
+          if (offset.current > max) {
+            offset.current = max;
+            scroller.current?.scrollTo({ x: max, animated: false });
+          }
+        }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Add filter"
