@@ -20,10 +20,12 @@ const PAD_TOP = 8;
 const PAD_BOTTOM = 4;
 const GUTTER = 46;
 
-function timeLabel(t: number, spanMs: number): string {
+/** Clock time, plus the day when the chart spans more than a few hours and the time alone could be either day. */
+function timeLabel(t: number, spanMs: number): { time: string; day?: string } {
   const d = new Date(t);
-  if (spanMs > 36 * 3_600_000) return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  if (spanMs > 36 * 3_600_000) return { time: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) };
+  const time = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return spanMs > 6 * 3_600_000 ? { time, day: d.toLocaleDateString(undefined, { weekday: 'short' }) } : { time };
 }
 
 function readoutTime(t: number): string {
@@ -143,9 +145,15 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
       </View>
       {hasData ? (
         <View style={[styles.xAxis, { marginRight: GUTTER }]} pointerEvents="none">
-          <ThemedText type="caption">{timeLabel(tMin, tSpan)}</ThemedText>
-          <ThemedText type="caption">{timeLabel(tMin + tSpan / 2, tSpan)}</ThemedText>
-          <ThemedText type="caption">{timeLabel(tMax, tSpan)}</ThemedText>
+          {[tMin, tMin + tSpan / 2, tMax].map((t, i) => {
+            const label = timeLabel(t, tSpan);
+            return (
+              <View key={i} style={i === 0 ? styles.tickStart : i === 2 ? styles.tickEnd : styles.tickMid}>
+                <ThemedText type="caption">{label.time}</ThemedText>
+                {label.day ? <ThemedText type="caption" style={{ color: theme.textSecondary }}>{label.day}</ThemedText> : null}
+              </View>
+            );
+          })}
         </View>
       ) : null}
       {legend && series.length > 1 ? (
@@ -177,6 +185,9 @@ const styles = StyleSheet.create({
   axis: { position: 'absolute', right: 0, top: 0, bottom: 0 },
   axisLabel: { position: 'absolute', right: 0, textAlign: 'right', width: GUTTER - 4 },
   xAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  tickStart: { alignItems: 'flex-start' },
+  tickMid: { alignItems: 'center' },
+  tickEnd: { alignItems: 'flex-end' },
   noData: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 6 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },

@@ -301,7 +301,7 @@ export function metricAggregations(kind: MetricKind, monotonic?: boolean): Metri
   if (kind === 'sum' && monotonic !== false) {
     return [
       { key: 'rate', label: 'Rate', time: 'rate', space: 'sum' },
-      { key: 'increase', label: 'Increase', time: 'increase', space: 'sum' },
+      { key: 'increase', label: 'Count', time: 'increase', space: 'sum' },
     ];
   }
   if (kind === 'sum') {
