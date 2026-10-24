@@ -405,6 +405,9 @@ export async function fetchSpans(
 
 // ---- metrics ---------------------------------------------------------------------------------
 
+/** The most metrics fetched at once. Browsing and search both work on this list, so it is generous. */
+export const METRIC_LIMIT = 5000;
+
 export async function listMetrics(
   client: SignozClient,
   search: string,
@@ -412,7 +415,7 @@ export async function listMetrics(
   signal?: AbortSignal,
 ): Promise<MetricInfo[]> {
   const data = await client.request<{ metrics?: Json[] | null }>('/api/v2/metrics', {
-    query: { searchText: search || undefined, limit: 100, start: range.startMs, end: range.endMs },
+    query: { searchText: search || undefined, limit: METRIC_LIMIT, start: range.startMs, end: range.endMs },
     signal,
   });
   return (data.metrics ?? []).map((m) => ({

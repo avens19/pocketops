@@ -37,6 +37,7 @@ foundryctl cast -f casting.yaml                          # UI on :8080, OTLP on 
 
 node tools/seed-signoz/seed.mjs --hours 6 --live         # five services of traces, logs, metrics; --live keeps emitting
 SIGNOZ_ADMIN_PASSWORD=... node tools/seed-signoz/rules.mjs  # alert rules in every state (needs the admin login)
+node tools/seed-signoz/metric-names.mjs                      # ~140 differently named metrics, to try the Metrics tab's folders
 ```
 
 From the Android emulator the host is `http://10.0.2.2:8080`. For the web build (`npx expo start --web`) a browser needs CORS,

@@ -101,7 +101,7 @@ arbitrary order (calls/errors/p99 were swapped on the service chart), the connec
 1. iOS build and a pass on a real device (Android emulator is not a phone: gestures, fonts, notch).
 2. Test against a production-sized SigNoz (34+ services, millions of spans): paging, autocomplete latency, waterfall size.
 3. A deep link to a log; group-by across more than one field in the UI (links already carry several).
-4. Metrics: label filters and better search (aggregation choices, real label splits and unit formatting exist).
+4. Metrics: label filters. Names browse as folders (`src/lib/metric-tree.ts`: group by next segment, collapse single-child chains, flat under 15, case-insensitive order; dotted names split on `.`, dotless on `_`); the list is fetched once (up to 5000) and search filters it on the phone, scoped to the folder you are in.
 5. Dashboards are not covered at all. A link tapped while signed out is lost.
 6. Trace operators (`B → A`) cannot run.
 7. Then release builds, `eas update` to a channel, and store-listing checks.
