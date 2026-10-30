@@ -164,8 +164,14 @@ export class SignozClient {
     }
 
     if (json === undefined) {
-      // A 200 that is not JSON is almost always a login page or a proxy answering in SigNoz's place.
-      throw new SignozError('The server did not answer like SigNoz. Is the URL right?', 'unknown', response.status);
+      // SigNoz serves its web UI (200, HTML) for a route it lacks, so an unredirected HTML page is a missing endpoint.
+      // Anything else that is not JSON is almost always a login page or a proxy answering in SigNoz's place.
+      const isUiFallback = !response.redirected && (response.headers.get('Content-Type') ?? '').includes('text/html');
+      throw new SignozError(
+        'The server did not answer like SigNoz. Is the URL right?',
+        isUiFallback ? 'not-found' : 'unknown',
+        response.status,
+      );
     }
     if (json && typeof json === 'object' && 'status' in json) {
       const env = json as { status?: string; data?: unknown };
@@ -177,7 +183,7 @@ export class SignozClient {
 
   /**
    * Checks the endpoint and key together. Newer SigNoz exposes `/service_accounts/me`; older versions
-   * do not, so a 404 there falls back to a read that every Viewer key can make.
+   * do not, so a missing endpoint there falls back to a read that every Viewer key can make.
    */
   async verify(signal?: AbortSignal): Promise<void> {
     try {
