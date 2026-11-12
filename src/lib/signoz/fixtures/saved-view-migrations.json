@@ -1,0 +1,22 @@
+{
+  "displayName": "Migrations",
+  "panelType": "list",
+  "requestType": "raw",
+  "queries": [{
+    "type": "builder_query",
+    "spec": {
+      "name": "A", "stepInterval": 0, "signal": "logs", "source": "", "aggregations": null, "disabled": false,
+      "filter": { "expression": "creditapp.job in ['post-deploy'] AND (body.message in ['Backfill progress', 'Migration progress', 'Denormalizer migrated', 'Denormalizer backfilled', 'Migrating denormalizer', 'Backfilling denormalizer'])" },
+      "groupBy": null, "order": null, "selectFields": null, "secondaryAggregations": null, "functions": null, "legend": ""
+    }
+  }],
+  "selectedFields": [
+    { "name": "timestamp", "signal": "logs", "fieldContext": "log", "fieldDataType": "" },
+    { "name": "service.name", "signal": "logs", "fieldContext": "resource", "fieldDataType": "string" },
+    { "name": "message", "signal": "logs", "fieldContext": "body", "fieldDataType": "string" },
+    { "name": "denormalizerName", "signal": "logs", "fieldContext": "body", "fieldDataType": "string" },
+    { "name": "currentEventCreatedAt", "signal": "logs", "fieldContext": "body", "fieldDataType": "string" },
+    { "name": "body", "signal": "logs", "fieldContext": "log", "fieldDataType": "" }
+  ],
+  "display": { "maxLines": 1, "fontSize": "small", "format": "table", "color": "" }
+}

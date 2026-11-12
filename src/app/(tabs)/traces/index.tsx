@@ -1,3 +1,4 @@
+import { AggregateExplorer } from '@/components/aggregate-explorer';
 import { viewSpecFromQuery } from '@/lib/signoz/views';
 import { spanGroupsQuery, spanListQuery } from '@/lib/signoz/queries';
 import { SavedViewsBar } from '@/components/saved-views';
@@ -31,6 +32,8 @@ type TracesParams = ExploreParams & { groupBy?: string; op?: string };
 
 export default function TracesScreen() {
   const params = useLocalSearchParams<TracesParams>();
+  const { aggregate } = useExplorer('traces');
+  if (aggregate) return <AggregateExplorer key={params.n} source="traces" initial={aggregate} params={params} />;
   return <TracesView key={`${params.saved ? params.n : ''}|${params.last}|${params.from}|${params.to}`} params={params} />;
 }
 

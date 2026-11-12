@@ -25,13 +25,14 @@ export function SavedViewsBar(props: SavedViewsBarProps) {
 
 function ExplorerSavedViewsBar({ source, spec, range }: SavedViewsBarProps & { source: ExplorerSignal }) {
   const create = useViewPermission({ action: 'create' });
-  const { saved } = useExplorer(source);
+  const { saved, aggregateReturn } = useExplorer(source);
   const [draft, setDraft] = useState<{ spec: ViewSpec; baseline: ViewSpec; id?: string }>();
   const current = spec && saved ? mergeExplorerView(saved.view, saved.baseline, spec) : spec;
   const dirty = !!saved && current !== saved.view.spec;
   return <View style={{ gap: Spacing.two }}>
     {saved ? <ThemedText type="small">{saved.view.spec.displayName}{dirty ? ' · Unsaved changes' : ''}</ThemedText> : null}
     <View style={styles.row}>
+      {aggregateReturn ? <Chip label={aggregateReturn.aggregate?.panelType === 'graph' ? 'Back to chart' : 'Back to table'} onPress={() => { router.setParams(viewRangeParams(range)); explorer.restoreAggregate(source); }} /> : null}
       <Chip label="Saved views" onPress={() => router.push({ pathname: '/views', params: { source, ...viewRangeParams(range) } })} />
       {current && spec && create.allowed ? <Chip label={saved ? 'Save a copy' : 'Save view'} onPress={() => setDraft({ spec: current, baseline: spec })} /> : null}
       {saved && current && spec ? <UpdateViewChip id={saved.view.id} onPress={() => setDraft({ spec: current, baseline: spec, id: saved.view.id })} /> : null}
@@ -139,6 +140,6 @@ const styles = StyleSheet.create({ row: { flexDirection: 'row', flexWrap: 'wrap'
 
 export function viewRangeParams(range?: RangeSpec) {
   if (!range) return {};
-  if ('startMs' in range) return { from: String(range.startMs), to: String(range.endMs) };
-  return { last: String('key' in range ? RANGES.find((r) => r.key === range.key)!.ms : range.lastMs) };
+  if ('startMs' in range) return { last: undefined, from: String(range.startMs), to: String(range.endMs) };
+  return { from: undefined, to: undefined, last: String('key' in range ? RANGES.find((r) => r.key === range.key)!.ms : range.lastMs) };
 }

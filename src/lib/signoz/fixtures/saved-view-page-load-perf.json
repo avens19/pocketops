@@ -1,0 +1,88 @@
+{
+  "displayName": "Page Load Perf",
+  "panelType": "graph",
+  "requestType": "time_series",
+  "queries": [
+    {
+      "type": "builder_query",
+      "spec": {
+        "name": "A",
+        "stepInterval": 0,
+        "signal": "traces",
+        "source": "",
+        "aggregations": [
+          {
+            "expression": "p90(duration_nano) / 1000000",
+            "alias": "p90_ms"
+          }
+        ],
+        "disabled": false,
+        "filter": {
+          "expression": "deployment.environment in ['production'] AND service.name = 'administrative-portal' AND kind_string = 'Server' AND (http.status_code = 200 OR http.response.status_code = 200) AND (http.method = 'GET' OR http.request.method = 'GET') AND http.route NOT LIKE '/api/operations/streams/%'"
+        },
+        "groupBy": [
+          {
+            "name": "http.route",
+            "signal": "",
+            "fieldContext": "attribute",
+            "fieldDataType": "string"
+          }
+        ],
+        "order": [
+          {
+            "key": {
+              "name": "p90_ms",
+              "signal": "",
+              "fieldContext": "",
+              "fieldDataType": ""
+            },
+            "direction": "desc"
+          }
+        ],
+        "selectFields": null,
+        "limit": 10,
+        "secondaryAggregations": null,
+        "functions": null,
+        "legend": ""
+      }
+    }
+  ],
+  "selectedFields": [
+    {
+      "name": "service.name",
+      "signal": "traces",
+      "fieldContext": "resource",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "name",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "duration_nano",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": "number"
+    },
+    {
+      "name": "http_method",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    },
+    {
+      "name": "response_status_code",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    }
+  ],
+  "display": {
+    "maxLines": 0,
+    "fontSize": "",
+    "format": "",
+    "color": "#2fb344"
+  }
+}

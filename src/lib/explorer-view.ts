@@ -1,6 +1,6 @@
 import { clausesToExpression, parseExpression } from './filters';
 import type { ExplorerSignal } from './explorer-state';
-import { logsQuery, spanGroupsQuery, spanListQuery, quote, type SpanSort } from './signoz/queries';
+import { logsQuery, spanListQuery, quote, type SpanSort } from './signoz/queries';
 import { viewSpecFromQuery, type SavedView, type ViewSpec } from './signoz/views';
 
 export interface ExplorerView {
@@ -12,9 +12,10 @@ export interface ExplorerView {
   sort: SpanSort;
   groupBy: string[];
   baseline: ViewSpec;
+  aggregate?: ViewSpec;
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-const empty = (value: unknown) => value === undefined || (Array.isArray(value) && value.length === 0);
+const empty = (value: unknown) => value == null || (Array.isArray(value) && value.length === 0);
 
 /** Only use the normal explorers when their query controls can represent the entire saved query. */
 export function asExplorerView(view: SavedView): ExplorerView | null {
@@ -22,10 +23,12 @@ export function asExplorerView(view: SavedView): ExplorerView | null {
   const query = view.spec.queries[0];
   if (query.type !== 'builder_query' || query.spec.signal !== view.source || query.spec.disabled === true) return null;
   const q = query.spec;
-  const known = new Set(['name', 'signal', 'filter', 'limit', 'offset', 'order', 'selectFields', 'disabled', 'groupBy', 'aggregations', 'stepInterval', 'legend']);
+  const known = new Set(['name', 'signal', 'filter', 'limit', 'offset', 'order', 'selectFields', 'disabled', 'groupBy', 'aggregations', 'stepInterval', 'legend', 'source', 'secondaryAggregations', 'functions']);
   if (Object.keys(q).some((key) => !known.has(key))) return null;
-  if (view.spec.requestType !== 'raw' && q.stepInterval != null) return null;
-  if (q.offset !== undefined && q.offset !== 0) return null;
+  // SigNoz serializes absent query options as null (and the default source as an empty string).
+  // Accept those defaults without admitting active functions, secondary aggregations or another source.
+  if ((q.source != null && q.source !== '') || !empty(q.secondaryAggregations) || !empty(q.functions)) return null;
+  if (q.offset != null && q.offset !== 0) return null;
   const filter = q.filter as { expression?: unknown } | undefined;
   if (filter && (typeof filter !== 'object' || Object.keys(filter).some((k) => k !== 'expression') || (filter.expression !== undefined && typeof filter.expression !== 'string'))) return null;
   const clauses = parseExpression(typeof filter?.expression === 'string' ? filter.expression : '');
@@ -46,9 +49,9 @@ export function asExplorerView(view: SavedView): ExplorerView | null {
   const expression = clausesToExpression(remaining);
   const traceExpression = [rootOnly ? 'isRoot = true' : '', errorsOnly ? 'has_error = true' : '', expression ? `(${expression})` : '', text ? `name CONTAINS ${quote(text.trim())}` : ''].filter(Boolean).join(' AND ');
   const order = q.order as { key?: { name?: string }; direction?: string }[] | undefined;
-  if (order !== undefined && !Array.isArray(order)) return null;
+  if (order != null && !Array.isArray(order)) return null;
   const fields = q.groupBy as { name?: unknown }[] | undefined;
-  if (fields !== undefined && (!Array.isArray(fields) || fields.some((f) => !f || typeof f.name !== 'string' || !f.name))) return null;
+  if (fields != null && (!Array.isArray(fields) || fields.some((f) => !f || typeof f.name !== 'string' || !f.name))) return null;
   const groupBy = (fields ?? []).map((f) => f.name as string);
   let sort: SpanSort = 'latest';
   const range = { startMs: 0, endMs: 1 };
@@ -66,12 +69,11 @@ export function asExplorerView(view: SavedView): ExplorerView | null {
     baseline = viewSpecFromQuery(view.source, view.source === 'logs'
       ? logsQuery(range, { expression, text }, 50, 0)
       : spanListQuery(range, traceExpression, 50, 0, sort));
-  } else if (view.source === 'traces' && view.spec.panelType === 'table' && view.spec.requestType === 'scalar' && groupBy.length) {
-    const expected = spanGroupsQuery(range, traceExpression, groupBy);
-    const aggregates = q.aggregations as { expression?: string; alias?: string }[] | undefined;
-    const expectedAggregates = (expected.compositeQuery.queries[0] as { spec: { aggregations: unknown } }).spec.aggregations;
-    if (!same(aggregates, expectedAggregates) || (order?.length && !same(order, [{ key: { name: 'count' }, direction: 'desc' }]))) return null;
-    baseline = viewSpecFromQuery('traces', expected);
+  } else if ((view.spec.panelType === 'table' && view.spec.requestType === 'scalar') || (view.spec.panelType === 'graph' && view.spec.requestType === 'time_series')) {
+    if (!Array.isArray(q.aggregations) || !q.aggregations.length || q.aggregations.some((a) => !a || typeof a.expression !== 'string' || !a.expression.trim())) return null;
+    const expressionForQuery = view.source === 'traces' ? traceExpression : (logsQuery(range, { expression, text }, 50, 0).compositeQuery.queries[0] as { spec: { filter: { expression: string } } }).spec.filter.expression;
+    baseline = { ...view.spec, queries: [{ ...query, spec: { ...q, filter: { ...filter, expression: expressionForQuery } } }] };
+    return { source: view.source, expression, text, rootOnly, errorsOnly, sort, groupBy, baseline, aggregate: baseline };
   } else return null;
   return { source: view.source, expression, text, rootOnly, errorsOnly, sort, groupBy, baseline };
 }
@@ -83,7 +85,7 @@ export function mergeExplorerView(view: SavedView, baseline: ViewSpec, current: 
   const after = current.queries[0].spec;
   const spec = { ...original.queries[0].spec };
   let changed = false;
-  for (const key of ['filter', 'order', 'aggregations', 'groupBy'] as const) {
+  for (const key of ['filter', 'order', 'aggregations', 'groupBy', 'limit', 'stepInterval', 'legend'] as const) {
     if (same(before[key], after[key])) continue;
     changed = true;
     if (after[key] === undefined) delete spec[key];

@@ -25,6 +25,8 @@ export interface ExplorerState {
   /** Traces only: show counts per value of these fields instead of the span list. */
   groupBy: string[];
   sort: SpanSort;
+  aggregate?: ViewSpec;
+  aggregateReturn?: Pick<ExplorerState, 'aggregate' | 'clauses' | 'text' | 'rootOnly' | 'errorsOnly' | 'groupBy'>;
   saved?: { view: SavedView; baseline: ViewSpec };
 }
 
@@ -50,10 +52,21 @@ export const explorer = {
   reset: () => { set('logs', EMPTY); set('traces', EMPTY); },
   loadView: (view: SavedView, loaded: ExplorerView, sig: string) => set(loaded.source, {
     ...EMPTY, clauses: parseExpression(loaded.expression), text: loaded.text, rootOnly: loaded.rootOnly, errorsOnly: loaded.errorsOnly,
-    groupBy: loaded.groupBy, sort: loaded.sort, sig, saved: { view, baseline: loaded.baseline },
+    aggregate: loaded.aggregate, groupBy: loaded.groupBy, sort: loaded.sort, sig, saved: { view, baseline: loaded.baseline },
   }),
   attachView: (signal: ExplorerSignal, view: SavedView, baseline: ViewSpec) => set(signal, { ...states[signal], saved: { view, baseline } }),
   detachView: (signal: ExplorerSignal) => set(signal, { ...states[signal], saved: undefined }),
+  setAggregate: (signal: ExplorerSignal, aggregate: ViewSpec) => set(signal, { ...states[signal], aggregate }),
+  drillAggregate: (signal: ExplorerSignal, clauses: Clause[]) => {
+    const s = states[signal];
+    const { aggregate, text, rootOnly, errorsOnly, groupBy } = s;
+    set(signal, { ...s, clauses: [...s.clauses, ...clauses], aggregate: undefined, groupBy: [], sort: 'latest',
+      aggregateReturn: { aggregate, clauses: s.clauses, text, rootOnly, errorsOnly, groupBy } });
+  },
+  restoreAggregate: (signal: ExplorerSignal) => {
+    const s = states[signal];
+    if (s.aggregateReturn) set(signal, { ...s, ...s.aggregateReturn, aggregateReturn: undefined });
+  },
   setSort: (signal: ExplorerSignal, sort: SpanSort) => set(signal, { ...states[signal], sort }),
   add: (signal: ExplorerSignal, clause: Clause) => {
     const s = states[signal];
@@ -67,7 +80,7 @@ export const explorer = {
   investigate: (signal: ExplorerSignal, clause: Clause) => {
     const s = states[signal];
     // Drilling into a group leaves group-by, so the matching spans are what you see next.
-    set(signal, { ...s, clauses: addClause(s.clauses, clause), rootOnly: signal === 'traces' ? false : s.rootOnly, groupBy: [] });
+    set(signal, { ...s, clauses: addClause(s.clauses, clause), rootOnly: signal === 'traces' ? false : s.rootOnly, groupBy: [], aggregate: undefined });
   },
   setRootOnly: (signal: ExplorerSignal, rootOnly: boolean) => set(signal, { ...states[signal], rootOnly }),
   setErrorsOnly: (signal: ExplorerSignal, errorsOnly: boolean) => set(signal, { ...states[signal], errorsOnly }),
@@ -88,7 +101,7 @@ export const explorer = {
   setExpression: (signal: ExplorerSignal, expression: string, text = '', sig?: string) => {
     const s = states[signal];
     // A query that arrives from elsewhere (a link, an alert, a service) is about specific spans: show them all, not just roots.
-    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, saved: sig === undefined ? s.saved : undefined, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
+    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, saved: sig === undefined ? s.saved : undefined, aggregate: sig === undefined ? s.aggregate : undefined, aggregateReturn: sig === undefined ? s.aggregateReturn : undefined, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
   },
   clear: (signal: ExplorerSignal) => set(signal, { ...states[signal], clauses: [], text: '' }),
   expression: (signal: ExplorerSignal) => clausesToExpression(states[signal].clauses),

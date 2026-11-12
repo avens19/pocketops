@@ -1,0 +1,29 @@
+{
+  "displayName": "CBB Lookups",
+  "panelType": "table",
+  "requestType": "scalar",
+  "queries": [
+    { "type": "builder_query", "spec": {
+      "name": "A", "stepInterval": 0, "signal": "traces", "source": "", "aggregations": [{ "expression": "count()" }], "disabled": false,
+      "filter": { "expression": "url.full = 'https://service.canadianblackbook.com/UsedCarWS/CanUsedAPI/GraphQL' deployment.environment in ['production']" },
+      "groupBy": [{ "name": "http.route", "signal": "", "fieldContext": "attribute", "fieldDataType": "string" }],
+      "order": null, "selectFields": null, "limit": 200, "secondaryAggregations": null, "functions": null, "legend": ""
+    } },
+    { "type": "builder_query", "spec": {
+      "name": "B", "stepInterval": 0, "signal": "traces", "source": "", "aggregations": [{ "expression": "count()" }], "disabled": false,
+      "filter": { "expression": "isRoot = 'true'" }, "groupBy": null, "order": null, "selectFields": null, "secondaryAggregations": null, "functions": null, "legend": ""
+    } },
+    { "type": "builder_trace_operator", "spec": {
+      "name": "Trace Operator", "disabled": false, "expression": "B -> A", "order": null, "aggregations": [{ "expression": "count()" }], "stepInterval": 0,
+      "groupBy": [{ "name": "name", "signal": "", "fieldContext": "", "fieldDataType": "string" }], "legend": "", "selectFields": null, "functions": null
+    } }
+  ],
+  "selectedFields": [
+    { "name": "service.name", "signal": "traces", "fieldContext": "resource", "fieldDataType": "string" },
+    { "name": "name", "signal": "traces", "fieldContext": "span", "fieldDataType": "string" },
+    { "name": "duration_nano", "signal": "traces", "fieldContext": "span", "fieldDataType": "" },
+    { "name": "http_method", "signal": "traces", "fieldContext": "span", "fieldDataType": "" },
+    { "name": "response_status_code", "signal": "traces", "fieldContext": "span", "fieldDataType": "" }
+  ],
+  "display": { "maxLines": 0, "fontSize": "", "format": "", "color": "#ad7f58" }
+}

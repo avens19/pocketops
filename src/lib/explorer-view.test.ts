@@ -7,7 +7,9 @@ import { applyRouteFilter, paramsLanded } from './explore-links';
 import { clausesToExpression } from './filters';
 import { openSavedExplorer } from './open-saved-view';
 import { logsQuery, spanGroupsQuery, spanListQuery } from './signoz/queries';
-import { viewSpecFromQuery, type SavedView } from './signoz/views';
+import migrations from './signoz/fixtures/saved-view-migrations.json';
+import cbbLookups from './signoz/fixtures/saved-view-cbb-lookups.json';
+import { savedViewQuery, viewSpecFromQuery, type ViewSpec, type SavedView } from './signoz/views';
 
 vi.mock('expo-router', () => ({ router: { dismissTo: vi.fn() } }));
 
@@ -125,5 +127,45 @@ describe('saved query fidelity in the explorer', () => {
     for (const view of variants) expect(openSavedExplorer(view)).toBe(false);
     expect(router.dismissTo).not.toHaveBeenCalled();
     expect(explorer.get('traces').saved).toBeUndefined();
+  });
+});
+
+
+describe('server-serialized saved views', () => {
+  it('opens Migrations with both lowercase IN filters and nullable defaults in the logs explorer', () => {
+    const view: SavedView = { id: 'migrations', source: 'logs', schemaVersion: 'v2', spec: migrations as ViewSpec };
+    expect(openSavedExplorer(view)).toBe(true);
+    expect(router.dismissTo).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/logs' }));
+    const state = explorer.get('logs');
+    expect(state.clauses).toEqual([
+      { kind: 'filter', key: 'creditapp.job', op: 'IN', values: ['post-deploy'] },
+      { kind: 'filter', key: 'body.message', op: 'IN', values: ['Backfill progress', 'Migration progress', 'Denormalizer migrated', 'Denormalizer backfilled', 'Migrating denormalizer', 'Backfilling denormalizer'] },
+    ]);
+    const current = viewSpecFromQuery('logs', logsQuery(range, { expression: explorer.expression('logs') }, 50, 0));
+    expect(mergeExplorerView(view, state.saved!.baseline, current)).toBe(view.spec);
+    explorer.add('logs', { kind: 'filter', key: 'service.name', op: '=', value: 'worker' });
+    const edited = viewSpecFromQuery('logs', logsQuery(range, { expression: explorer.expression('logs') }, 50, 0));
+    const merged = mergeExplorerView(view, state.saved!.baseline, edited);
+    expect(merged.selectedFields).toEqual(migrations.selectedFields);
+    expect(merged.display).toEqual(migrations.display);
+    expect(merged.queries[0].spec).toMatchObject({ source: '', functions: null, secondaryAggregations: null, aggregations: null, groupBy: null, order: null, selectFields: null });
+    expect(merged.queries[0].spec.filter).toEqual(edited.queries[0].spec.filter);
+  });
+  it('accepts empty optional defaults but continues rejecting active or malformed options', () => {
+    const view: SavedView = { id: 'migrations', source: 'logs', schemaVersion: 'v2', spec: migrations as ViewSpec };
+    const withOptions = (extra: Record<string, unknown>): SavedView => ({ ...view, spec: { ...view.spec, queries: [{ ...view.spec.queries[0], spec: { ...view.spec.queries[0].spec, ...extra } }] } });
+    expect(asExplorerView(withOptions({ source: null, functions: [], secondaryAggregations: [], aggregations: [], groupBy: [], order: [], offset: null }))).not.toBeNull();
+    for (const extra of [{ source: 'meter' }, { functions: [{ name: 'topK' }] }, { secondaryAggregations: [{ expression: 'sum()' }] }, { functions: {} }, { order: {} }, { groupBy: {} }, { futureOption: null }]) {
+      expect(asExplorerView(withOptions(extra))).toBeNull();
+    }
+  });
+  it('keeps all of CBB Lookups intact for the full-query preview instead of showing just A or B', () => {
+    const view: SavedView = { id: 'cbb', source: 'traces', schemaVersion: 'v2', spec: cbbLookups as ViewSpec };
+    expect(openSavedExplorer(view)).toBe(false);
+    expect(router.dismissTo).not.toHaveBeenCalled();
+    const request = savedViewQuery(view.spec, range);
+    expect(request.requestType).toBe('scalar');
+    expect(request.compositeQuery.queries).toEqual(cbbLookups.queries);
+    expect(request.compositeQuery.queries[2].spec.expression).toBe('B -> A');
   });
 });

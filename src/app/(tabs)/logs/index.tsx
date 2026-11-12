@@ -1,3 +1,4 @@
+import { AggregateExplorer } from '@/components/aggregate-explorer';
 import { viewSpecFromQuery } from '@/lib/signoz/views';
 import { logsQuery } from '@/lib/signoz/queries';
 import { SavedViewsBar } from '@/components/saved-views';
@@ -39,6 +40,8 @@ type LogsParams = ExploreParams;
 
 export default function LogsScreen() {
   const params = useLocalSearchParams<LogsParams>();
+  const { aggregate } = useExplorer('logs');
+  if (aggregate) return <AggregateExplorer key={params.n} source="logs" initial={aggregate} params={params} />;
   // The window comes from the params too, so a new link restarts the view.
   return <LogsView key={`${params.saved ? params.n : ''}|${params.last}|${params.from}|${params.to}`} params={params} />;
 }

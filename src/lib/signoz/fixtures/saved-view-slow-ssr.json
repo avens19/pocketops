@@ -1,0 +1,88 @@
+{
+  "displayName": "Slow SSR",
+  "panelType": "table",
+  "requestType": "scalar",
+  "queries": [
+    {
+      "type": "builder_query",
+      "spec": {
+        "name": "A",
+        "stepInterval": 0,
+        "signal": "traces",
+        "source": "",
+        "aggregations": [
+          {
+            "expression": "p90(duration_nano) / 1000000",
+            "alias": "p90_ms"
+          }
+        ],
+        "disabled": false,
+        "filter": {
+          "expression": "deployment.environment in ['production'] AND service.name = 'administrative-portal' AND name LIKE 'render%'"
+        },
+        "groupBy": [
+          {
+            "name": "next.route",
+            "signal": "",
+            "fieldContext": "attribute",
+            "fieldDataType": "string"
+          }
+        ],
+        "order": [
+          {
+            "key": {
+              "name": "p90_ms",
+              "signal": "",
+              "fieldContext": "",
+              "fieldDataType": ""
+            },
+            "direction": "desc"
+          }
+        ],
+        "selectFields": null,
+        "limit": 10,
+        "secondaryAggregations": null,
+        "functions": null,
+        "legend": "next.route = {{next.route}}"
+      }
+    }
+  ],
+  "selectedFields": [
+    {
+      "name": "service.name",
+      "signal": "traces",
+      "fieldContext": "resource",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "name",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "duration_nano",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": "number"
+    },
+    {
+      "name": "http_method",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    },
+    {
+      "name": "response_status_code",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    }
+  ],
+  "display": {
+    "maxLines": 0,
+    "fontSize": "",
+    "format": "",
+    "color": "#e8590c"
+  }
+}
