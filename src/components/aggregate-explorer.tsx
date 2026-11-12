@@ -56,7 +56,9 @@ export function AggregateExplorer({ source, initial, params }: { source: Explore
   const recordName = source === 'logs' ? 'logs' : 'spans';
   function drill(clauses: Clause[]) {
     // Carry the actual displayed time window into the list, including on a rolling range.
-    router.setParams(viewRangeParams(resolved));
+    const rangeParams = viewRangeParams(resolved);
+    explorer.stageRoute(source, exploreSignature({ ...params, ...rangeParams }));
+    router.setParams(rangeParams);
     explorer.drillAggregate(source, clauses);
   }
   return <>

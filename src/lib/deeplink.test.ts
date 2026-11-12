@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { explorerQuery, firstUrl, relativeTimeMs, routeForUrl } from './deeplink';
 
 describe('routeForUrl', () => {
+  it('opens saved explorer links through the saved-view loader, preserving the week range', () => {
+    expect(routeForUrl('https://ops.creditapp.ca/traces-explorer?viewKey=%2201a15c57-b429-7d58-b62e-cade8ee13bfd%22&panelTypes=%22graph%22&relativeTime=1w')).toBe('/views/01a15c57-b429-7d58-b62e-cade8ee13bfd?last=604800000');
+    expect(routeForUrl('https://ops.creditapp.ca/dashboard/performance')).toBe('/dashboards/performance');
+  });
   it('maps SigNoz alert URLs', () => {
     expect(routeForUrl('https://signoz.example.com/alerts/overview?ruleId=abc-123')).toBe('/alerts/abc-123');
     expect(routeForUrl('https://signoz.example.com/alerts')).toBe('/alerts');

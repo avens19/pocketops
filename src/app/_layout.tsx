@@ -62,6 +62,9 @@ function Navigator() {
             name="open-link"
             options={{ headerShown: true, presentation: 'modal', title: 'Open a SigNoz link' }}
           />
+          <Stack.Screen name="dashboards/index" options={{ headerShown: true, title: 'Dashboards' }} />
+          <Stack.Screen name="dashboards/[id]/index" options={{ headerShown: true, title: 'Dashboard' }} />
+          <Stack.Screen name="dashboards/[id]/panel" options={{ headerShown: true, title: 'Panel' }} />
           <Stack.Screen name="views/index" options={{ headerShown: true, title: 'Saved views' }} />
           <Stack.Screen name="views/[id]" options={{ headerShown: true, title: 'Saved view' }} />
           <Stack.Screen name="settings" options={{ headerShown: true, title: 'Settings' }} />

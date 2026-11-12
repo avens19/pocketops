@@ -38,8 +38,13 @@ export function exploreSignature(p: ExploreParams): string {
  * old params does not undo the user's edits. The explorer remembers the signature; `paramsLanded` tells the screen when to query.
  */
 export function applyRouteFilter(signal: ExplorerSignal, p: ExploreParams): void {
-  if (!hasExploreFilter(p)) return;
   const sig = exploreSignature(p);
+  const pending = explorer.get(signal).pendingRouteSig;
+  if (pending) {
+    if (pending !== sig) return;
+    explorer.acceptRoute(signal);
+  }
+  if (!hasExploreFilter(p)) return;
   if (explorer.get(signal).sig !== sig) {
     explorer.setExpression(signal, expressionFromParams(p), '', sig);
     if (signal === 'traces' && p.groupBy) explorer.setGroupBy('traces', p.groupBy.split(',').filter(Boolean));

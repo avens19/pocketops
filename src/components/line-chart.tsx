@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { PanResponder, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Line, Polyline } from 'react-native-svg';
+import Svg, { Circle, Line, Polyline, Rect } from 'react-native-svg';
 
 import { ThemedText } from '@/components/themed-text';
 import { useTheme } from '@/hooks/use-theme';
+import { stackBars } from '@/lib/chart-stacks';
 import { formatValue } from '@/lib/format';
 import type { Series } from '@/lib/signoz/types';
 
 interface LineChartProps {
   series: Series[];
+  variant?: 'line' | 'stacked-bars';
   height?: number;
   /** Formats the y-axis labels and the scrub readout; defaults to a compact number. */
   format?: (v: number) => string;
@@ -32,18 +34,20 @@ function readoutTime(t: number): string {
   return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function LineChart({ series, height = 140, format = formatValue, legend }: LineChartProps) {
+export function LineChart({ series, height = 140, format = formatValue, legend, variant = 'line' }: LineChartProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
   const [cursor, setCursor] = useState<number | null>(null);
   const palette = [theme.accent, theme.info, theme.success, theme.warning, theme.danger];
 
   const points = series.flatMap((s) => s.points);
+  const bars = variant === 'stacked-bars' ? stackBars(series) : [];
+  const values = bars.length ? bars.flatMap((b) => [b.base, b.top]) : points.map((p) => p.v);
   const hasData = points.length > 0;
   const tMin = hasData ? Math.min(...points.map((p) => p.t)) : 0;
   const tMax = hasData ? Math.max(...points.map((p) => p.t)) : 1;
-  const vMax = hasData ? Math.max(0, ...points.map((p) => p.v)) : 1;
-  const vMin = hasData ? Math.min(0, ...points.map((p) => p.v)) : 0;
+  const vMax = hasData ? values.reduce((max, v) => Math.max(max, v), 0) : 1;
+  const vMin = hasData ? values.reduce((min, v) => Math.min(min, v), 0) : 0;
   const vSpan = vMax - vMin || 1;
   const tSpan = tMax - tMin || 1;
 
@@ -75,8 +79,8 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
   // A chart is a picture; this is what it says, for a screen reader.
   const latest = series[0]?.points[series[0].points.length - 1];
   const summary = hasData
-    ? `Line chart${series.length > 1 ? ` of ${series.length} series` : ''}. ${latest ? `Latest ${format(latest.v)}. ` : ''}Lowest ${format(vMin)}, highest ${format(vMax)}.`
-    : 'Line chart with no data in this range.';
+    ? `${variant === 'stacked-bars' ? 'Stacked bar' : 'Line'} chart${series.length > 1 ? ` of ${series.length} series` : ''}. ${latest ? `Latest ${format(latest.v)}. ` : ''}Lowest ${format(vMin)}, highest ${format(vMax)}.`
+    : 'Chart with no data in this range.';
 
   const readout = cursor === null ? [] : series.flatMap((s, i) => {
     const p = s.points.find((q) => q.t === cursor);
@@ -106,8 +110,12 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
             {gridValues.map((v, i) => (
               <Line key={i} x1={0} x2={plotW} y1={y(v)} y2={y(v)} stroke={theme.border} strokeWidth={1} strokeDasharray={i === 2 ? undefined : '3,4'} />
             ))}
+            {bars.map((bar, i) => {
+              const w = Math.max(1, plotW / Math.max(times.length, 1) * 0.8);
+              return <Rect key={i} x={Math.max(0, Math.min(plotW - w, x(bar.t) - w / 2))} y={Math.min(y(bar.top), y(bar.base))} width={w} height={Math.abs(y(bar.top) - y(bar.base))} fill={palette[bar.index % palette.length]} />;
+            })}
             {series.map((s, i) =>
-              s.points.length > 1 ? (
+              variant === 'line' && s.points.length > 1 ? (
                 <Polyline
                   key={`${s.name}-${i}`}
                   points={s.points.map((p) => `${x(p.t)},${y(p.v)}`).join(' ')}
@@ -119,6 +127,7 @@ export function LineChart({ series, height = 140, format = formatValue, legend }
                 />
               ) : null,
             )}
+            {variant === 'line' ? series.map((s, i) => s.points.length === 1 ? <Circle key={`single-${i}`} cx={x(s.points[0].t)} cy={y(s.points[0].v)} r={4} fill={palette[i % palette.length]} /> : null) : null}
             {cursor !== null ? (
               <>
                 <Line x1={x(cursor)} x2={x(cursor)} y1={PAD_TOP} y2={PAD_TOP + plotH} stroke={theme.textSecondary} strokeWidth={1} />

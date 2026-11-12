@@ -26,6 +26,11 @@ export function TabStack({ title }: { title: string }) {
           headerLargeTitleShadowVisible: false,
           headerRight: () => (
             <View style={styles.actions}>
+              <Link href="/dashboards" asChild>
+                <Pressable accessibilityRole="button" accessibilityLabel="Dashboards" hitSlop={8} style={styles.action}>
+                  <Icon name="dashboard" size={22} color={theme.accent} />
+                </Pressable>
+              </Link>
               <Link href="/open-link" asChild>
                 <Pressable accessibilityRole="button" accessibilityLabel="Open a SigNoz link" hitSlop={10} style={styles.action}>
                   <Icon name="link" size={22} color={theme.accent} />

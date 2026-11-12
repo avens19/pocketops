@@ -29,7 +29,7 @@ export default function OpenLinkScreen() {
     const url = firstUrl(text) ?? text.trim();
     const route = routeForUrl(url);
     if (!route) {
-      setError('That is not a SigNoz alert, service, logs or traces link.');
+      setError('That is not a recognized SigNoz dashboard, saved view, alert, service, logs or traces link.');
       return;
     }
     router.dismiss();

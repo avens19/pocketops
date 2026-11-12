@@ -33,6 +33,14 @@ export function routeForUrl(input: string): string | null {
   const [first, second] = segments;
   const params = url.searchParams;
 
+  if (first === 'dashboard' || first === 'dashboards') return second ? `/dashboards/${encodeURIComponent(second)}` : '/dashboards';
+  const rawView = params.get('viewKey');
+  if (rawView && ['logs', 'traces-explorer', 'metrics-explorer', 'metrics'].includes(first)) {
+    let id = rawView;
+    try { id = JSON.parse(rawView); } catch { /* Older links use an unquoted ID. */ }
+    if (typeof id === 'string' && id.trim()) return withParams(`/views/${encodeURIComponent(id)}`, timeParams(params));
+  }
+
   if (first === 'alerts') {
     const ruleId = params.get('ruleId') ?? params.get('ruleid');
     return ruleId ? `/alerts/${encodeURIComponent(ruleId)}` : '/alerts';

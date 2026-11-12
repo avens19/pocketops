@@ -18,6 +18,8 @@ export interface ExplorerState {
   text: string;
   /** Signature of the route navigation that last set this filter, so a screen knows its params have landed. */
   sig: string;
+  /** Ignore stale screen params while navigation catches up to an atomic explorer update. */
+  pendingRouteSig?: string;
   /** Traces only: list one row per trace (root spans) rather than every span. */
   rootOnly: boolean;
   /** Traces only: keep spans with an error. */
@@ -52,8 +54,10 @@ export const explorer = {
   reset: () => { set('logs', EMPTY); set('traces', EMPTY); },
   loadView: (view: SavedView, loaded: ExplorerView, sig: string) => set(loaded.source, {
     ...EMPTY, clauses: parseExpression(loaded.expression), text: loaded.text, rootOnly: loaded.rootOnly, errorsOnly: loaded.errorsOnly,
-    aggregate: loaded.aggregate, groupBy: loaded.groupBy, sort: loaded.sort, sig, saved: { view, baseline: loaded.baseline },
+    aggregate: loaded.aggregate, groupBy: loaded.groupBy, sort: loaded.sort, sig, pendingRouteSig: sig, saved: { view, baseline: loaded.baseline },
   }),
+  stageRoute: (signal: ExplorerSignal, sig: string) => set(signal, { ...states[signal], sig, pendingRouteSig: sig }),
+  acceptRoute: (signal: ExplorerSignal) => set(signal, { ...states[signal], pendingRouteSig: undefined }),
   attachView: (signal: ExplorerSignal, view: SavedView, baseline: ViewSpec) => set(signal, { ...states[signal], saved: { view, baseline } }),
   detachView: (signal: ExplorerSignal) => set(signal, { ...states[signal], saved: undefined }),
   setAggregate: (signal: ExplorerSignal, aggregate: ViewSpec) => set(signal, { ...states[signal], aggregate }),
@@ -101,7 +105,7 @@ export const explorer = {
   setExpression: (signal: ExplorerSignal, expression: string, text = '', sig?: string) => {
     const s = states[signal];
     // A query that arrives from elsewhere (a link, an alert, a service) is about specific spans: show them all, not just roots.
-    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, saved: sig === undefined ? s.saved : undefined, aggregate: sig === undefined ? s.aggregate : undefined, aggregateReturn: sig === undefined ? s.aggregateReturn : undefined, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
+    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, pendingRouteSig: undefined, saved: sig === undefined ? s.saved : undefined, aggregate: sig === undefined ? s.aggregate : undefined, aggregateReturn: sig === undefined ? s.aggregateReturn : undefined, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
   },
   clear: (signal: ExplorerSignal) => set(signal, { ...states[signal], clauses: [], text: '' }),
   expression: (signal: ExplorerSignal) => clausesToExpression(states[signal].clauses),

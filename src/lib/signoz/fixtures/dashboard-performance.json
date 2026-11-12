@@ -1,0 +1,4266 @@
+{
+  "spec": {
+    "display": {
+      "name": "CreditApp - Performance & Scalability",
+      "description": "Performance and scalability of CreditApp over time: request latency and throughput, admin portal page loads, the public API, commands and repositories, event bus lag, background work, MongoDB, and runtime capacity."
+    },
+    "variables": [
+      {
+        "kind": "ListVariable",
+        "spec": {
+          "display": {
+            "name": "env",
+            "description": "Kubernetes namespace: main is sandbox, staging, production."
+          },
+          "defaultValue": "production",
+          "allowAllValue": false,
+          "allowMultiple": false,
+          "customAllValue": "",
+          "capturingRegexp": "",
+          "sort": "alphabetical-asc",
+          "plugin": {
+            "kind": "signoz/DynamicVariable",
+            "spec": {
+              "name": "k8s.namespace.name",
+              "signal": "metrics"
+            }
+          },
+          "name": "env"
+        }
+      },
+      {
+        "kind": "ListVariable",
+        "spec": {
+          "display": {
+            "name": "service",
+            "description": "Narrows the per-service panels. Service name without the credit-app- prefix; workers are <service>-processors."
+          },
+          "allowAllValue": true,
+          "allowMultiple": true,
+          "customAllValue": "",
+          "capturingRegexp": "",
+          "sort": "alphabetical-asc",
+          "plugin": {
+            "kind": "signoz/DynamicVariable",
+            "spec": {
+              "name": "service.name",
+              "signal": "traces"
+            }
+          },
+          "name": "service"
+        }
+      }
+    ],
+    "panels": {
+      "command-conflicts": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Concurrency conflicts/sec",
+            "description": "Contention on hot aggregates. Grows faster than load when more writers touch the same streams."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "creditapp.repository.command.conflicts",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "outcome",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "repository {{outcome}}"
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "creditapp.eventstore.append.conflicts",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "eventstore append"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "commandbus-send-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "CommandBus.send latency",
+            "description": "Handler plus the wait for sync handlers: what a mutation waits for."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.CommandBus.send' AND service.name IN $service"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "container-restarts": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Container restarts (running count)",
+            "description": "Kubernetes' restart counter summed over each container's pods. A step up is a crash or an OOM kill; the count resets when pods are replaced."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "k8s.container.restarts",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "k8s.container.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{k8s.container.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "cpu-by-container": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "CPU used by container (cores, sum of pods)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "container.cpu.usage",
+                        "temporality": "",
+                        "timeAggregation": "avg",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "k8s.container.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "__result",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": "{{k8s.container.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "cpu-percent-of-limit": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "CPU used as % of limit (busiest pod)",
+            "description": "The busiest pod's CPU as a share of its container's Kubernetes CPU limit. At 100% the pod is throttled, so latency rises before anything fails."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "%",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 80,
+                  "unit": "%",
+                  "color": "#f9a825",
+                  "label": "80% of limit"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "container.cpu.usage",
+                              "temporality": "",
+                              "timeAggregation": "avg",
+                              "spaceAggregation": "max",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.container.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "k8s.container.cpu_limit",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "max",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.container.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A / B * 100",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "{{k8s.container.name}}"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "dead-letters": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Work parked in the dead-letter queue",
+            "description": "Terminal failures awaiting manual remediation. Empty until the first one."
+          },
+          "plugin": {
+            "kind": "signoz/BarChartPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false,
+                "stackedBarChart": true
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.dead_letter.recorded",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "denormalizer-duration": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Denormalizer handle p95 by denormalizer",
+            "description": "The ten slowest projections. Every event, unsampled."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ms",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.denormalizer.handle.duration.bucket",
+                        "temporality": "",
+                        "timeAggregation": "",
+                        "spaceAggregation": "p95"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "denormalizer",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "__result",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 10,
+                    "legend": "{{denormalizer}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "denormalizer-slow": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slow denormalizer handles (>= 1 s) per minute",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/BarChartPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false,
+                "stackedBarChart": true
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.denormalizer.handle.slow",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "event-handler-p95": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Event handler duration p95 by service",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.EventStoreDBEventBus.event' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "event-processing-lag": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Event processing lag (creation to handling)",
+            "description": "processingLagMs on the event handler span: delivery lag plus the wait behind earlier events in the same stream. Sampled spans."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ms",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(processingLagMs)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(processingLagMs)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(processingLagMs)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.EventStoreDBEventBus.event' AND service.name IN $service AND processingLagMs EXISTS"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "eventloop-delay-p99": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Event loop delay p99 (primary process)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "s",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "nodejs.eventloop.delay.p99",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "max"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND creditapp.process.role = 'primary' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "eventloop-utilization": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Event loop utilization (max pod)",
+            "description": "Share of time the loop was busy. Near 1 the process is CPU-bound whatever its CPU limit says."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "percentunit",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 0.8,
+                  "unit": "percentunit",
+                  "color": "#f9a825",
+                  "label": "80%"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "nodejs.eventloop.utilization",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "max"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND creditapp.process.role = 'primary' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "graphql-gateway-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "GraphQL gateway operation latency",
+            "description": "The data a page fetches after it renders: every query and mutation through the router."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND service.name = 'graphql-gateway' AND kind_string = 'Server' AND name NOT LIKE 'subscription %'"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "hpa-at-max": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Autoscalers at their maximum",
+            "description": "Current replicas as a share of the maximum. A line pinned at 100% has no room left to absorb more load."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "%",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 100,
+                  "unit": "%",
+                  "color": "#f9a825",
+                  "label": "at max"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "k8s.hpa.current_replicas",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.hpa.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "k8s.hpa.max_replicas",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.hpa.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A / B * 100",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "{{k8s.hpa.name}}"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "hpa-replicas": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Replicas by autoscaler",
+            "description": "How far KEDA scaled each deployment. Compare with k8s.hpa.max_replicas to see headroom."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "k8s.hpa.current_replicas",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "k8s.namespace.name = $env"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "k8s.hpa.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{k8s.hpa.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "http-active-requests": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "In-flight HTTP requests by service (max)",
+            "description": "Concurrency: requests being served at once. Rising concurrency at flat throughput means requests are queueing."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "http.server.active_requests",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "http-error-ratio": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "HTTP 5xx share of requests",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "%",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 1,
+                  "unit": "%",
+                  "color": "#f9a825",
+                  "label": "1%"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "http.server.request.duration.count",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service AND http.response.status_code >= 500"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "http.server.request.duration.count",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A / B * 100",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "5xx %"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "http-latency-p95-by-service": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "HTTP server latency p95 by service",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND kind_string = 'Server' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "http-latency-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "HTTP server latency (all selected services)",
+            "description": "Server spans of the selected services. Read from spans because the http.server.request.duration histogram keeps only the 0.1/0.5/1/5 s boundaries the autoscalers need, which pins every percentile under 100 ms to about 95 ms."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND kind_string = 'Server' AND service.name IN $service"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "http-throughput": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "HTTP requests/sec by service",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "{req}/s",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "http.server.request.duration.count",
+                        "temporality": "",
+                        "timeAggregation": "rate",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "memory-by-container": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Memory working set by container (max pod)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "By",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "container.memory.working_set",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "max"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "k8s.container.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "__result",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": "{{k8s.container.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "memory-percent-of-limit": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Memory working set as % of limit (busiest pod)",
+            "description": "The busiest pod's working set as a share of its container's Kubernetes memory limit. At 100% the pod is OOM-killed and restarts."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "%",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 80,
+                  "unit": "%",
+                  "color": "#f9a825",
+                  "label": "80% of limit"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "container.memory.working_set",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "max",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.container.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "k8s.container.memory_limit",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "max",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "k8s.namespace.name = $env AND k8s.container.name LIKE 'credit-app-%'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "k8s.container.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A / B * 100",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "{{k8s.container.name}}"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "mongo-pool": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Connection pool: checked out and waiting (max)",
+            "description": "Read as the maximum over each bucket: a queue that fills and drains inside one bucket reads zero on an average. Any sustained waiting means the pool is the bottleneck."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "MongoDbPool.checkedOut",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "service.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "{{service.name}} checked out"
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "MongoDbPool.waitQueue",
+                              "temporality": "",
+                              "timeAggregation": "max",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "service.name",
+                              "signal": "",
+                              "fieldContext": "",
+                              "fieldDataType": ""
+                            }
+                          ],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "{{service.name}} waiting"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "mongo-read-latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "MongoDB read latency",
+            "description": "find, aggregate, getMore, count and distinct driver spans. Sampled."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND scope.name = '@opentelemetry/instrumentation-mongodb' AND service.name IN $service AND db.operation.name IN ('find', 'aggregate', 'getMore', 'count', 'distinct')"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "mongo-slowest-collections": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest collections (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND scope.name = '@opentelemetry/instrumentation-mongodb' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "db.collection.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "mongo-write-latency": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "MongoDB write latency",
+            "description": "insert, update, delete, findAndModify and bulkWrite driver spans. Sampled."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND scope.name = '@opentelemetry/instrumentation-mongodb' AND service.name IN $service AND db.operation.name IN ('insert', 'update', 'delete', 'findAndModify', 'bulkWrite')"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "notes": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Sources and sampling",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TextPanel",
+            "spec": {
+              "mode": "markdown",
+              "text": "Built to show how CreditApp behaves as load grows: compare a week against the week before rather than reading one hour.\n\n- **Metric panels** (HTTP throughput, errors and concurrency, wait-for-sync, denormalizers, todo-list depth, pool, runtime, Kubernetes) count every request and event.\n- **Span panels** read sampled traces. The portals keep 1 in 10 traces and backend work follows its caller, so span **percentiles** are representative but span **counts** are a fraction of the real volume. Unparented `/v1/*` and `/api/*` requests (the public API) are kept whole.\n- **Admin portal page loads** are the server-rendered document requests (time to first byte from Next.js), not browser render time: the portal has no browser instrumentation. They are grouped by Next.js route (`http.route`), which leaves out requests that match no page: scanner probes and the 404 page.\n- **service** narrows the per-service panels; the public API, admin portal and Kubernetes panels ignore it.\n- **Scope**: every panel reads CreditApp only (`service.namespace = 'credit_app'`), leaving out the `external_integrations` services that share the Kubernetes namespace. Container metrics carry no `service.namespace`, so those panels match the `credit-app-*` containers; every HPA in the namespace is CreditApp's.\n- **GraphQL gateway** panels leave out `subscription` operations: each of those spans is a stream that stays open for minutes, not a request.",
+              "presentation": {
+                "textAlign": "left",
+                "verticalAlign": "top"
+              },
+              "headerOptions": {
+                "hide": false
+              }
+            }
+          },
+          "queries": [],
+          "links": []
+        }
+      },
+      "page-load-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Page load latency (server render)",
+            "description": "administrative-portal document GETs, excluding /api and /_next assets. Server time to response, sampled 1 in 10."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 1000000000,
+                  "unit": "ns",
+                  "color": "#f9a825",
+                  "label": "1 s"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND service.name = 'administrative-portal' AND kind_string = 'Server' AND name LIKE 'HTTP GET %' AND name NOT LIKE 'HTTP GET /api/%' AND name NOT LIKE 'HTTP GET /_next/%' AND http.route EXISTS AND http.route != '/404'"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "persistent-subscription-lag": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Persistent subscription lag by service",
+            "description": "Mean delay from event creation to the subscription producing it, per pod per export; the worst pod is drawn."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ms",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.eventbus.persistent_subscription_lag",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "max"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "public-api-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Public API latency",
+            "description": "Server spans of the public-api nginx proxy, the integrators' view. Every /v1 request is traced."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND (resource.k8s.namespace.name = $env OR resource.deployment.environment = $env) AND service.name = 'public-api' AND kind_string = 'Server'"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "public-api-slowest-endpoints": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest public API endpoints (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND (resource.k8s.namespace.name = $env OR resource.deployment.environment = $env) AND service.name = 'public-api' AND kind_string = 'Server'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "public-api-throughput": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Public API requests by status",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/BarChartPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false,
+                "stackedBarChart": true
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "traces",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "expression": "count()",
+                              "alias": "2xx/3xx"
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "resource.service.namespace = 'credit_app' AND (resource.k8s.namespace.name = $env OR resource.deployment.environment = $env) AND service.name = 'public-api' AND kind_string = 'Server' AND http.status_code < 400"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "2xx/3xx"
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "traces",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "expression": "count()",
+                              "alias": "4xx"
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "resource.service.namespace = 'credit_app' AND (resource.k8s.namespace.name = $env OR resource.deployment.environment = $env) AND service.name = 'public-api' AND kind_string = 'Server' AND http.status_code >= 400 AND http.status_code < 500"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "4xx"
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "C",
+                          "stepInterval": 0,
+                          "signal": "traces",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "expression": "count()",
+                              "alias": "5xx"
+                            }
+                          ],
+                          "disabled": false,
+                          "filter": {
+                            "expression": "resource.service.namespace = 'credit_app' AND (resource.k8s.namespace.name = $env OR resource.deployment.environment = $env) AND service.name = 'public-api' AND kind_string = 'Server' AND http.status_code >= 500"
+                          },
+                          "groupBy": [],
+                          "order": [],
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": "5xx"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "repository-cache-loads": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Aggregate cache loads/sec by outcome",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.repository.cache.loads",
+                        "temporality": "",
+                        "timeAggregation": "rate",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "outcome",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{outcome}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "repository-with-percentiles": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Repository.with latency",
+            "description": "Lock, load, handler and append for one aggregate. The dashed line is the 90 ms p90 target carried over from the performance-improvements dashboard."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": [
+                {
+                  "value": 90000000,
+                  "unit": "ns",
+                  "color": "#2e7d32",
+                  "label": "90 ms"
+                }
+              ]
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p50(duration_nano)",
+                        "alias": "p50"
+                      },
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.Repository.with' AND service.name IN $service"
+                    },
+                    "groupBy": [],
+                    "order": [],
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "slowest-commands": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest commands (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.CommandBus.send' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "log.commandName",
+                        "signal": "",
+                        "fieldContext": "attribute",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "slowest-graphql-operations": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest GraphQL operations (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND service.name = 'graphql-gateway' AND kind_string = 'Server' AND name NOT LIKE 'subscription %'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "slowest-pages": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest pages (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND service.name = 'administrative-portal' AND kind_string = 'Server' AND name LIKE 'HTTP GET %' AND name NOT LIKE 'HTTP GET /api/%' AND name NOT LIKE 'HTTP GET /_next/%' AND http.route EXISTS AND http.route != '/404'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "http.route",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "slowest-repositories": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Slowest repositories (p95)",
+            "description": ""
+          },
+          "plugin": {
+            "kind": "signoz/TablePanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "columnUnits": {
+                  "A.p95(duration_nano)": "ns",
+                  "A.p99(duration_nano)": "ns"
+                },
+                "decimalPrecision": "2"
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "scalar",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      },
+                      {
+                        "expression": "p99(duration_nano)",
+                        "alias": "p99"
+                      },
+                      {
+                        "expression": "count()",
+                        "alias": "spans"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.Repository.with' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "log.repositoryName",
+                        "signal": "",
+                        "fieldContext": "attribute",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "p95(duration_nano)",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": ""
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "todolist-pending": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Todo list backlog (max pending items)",
+            "description": "A backlog that does not drain between peaks means the processors are under-provisioned."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.todolist.pending_items",
+                        "temporality": "",
+                        "timeAggregation": "max",
+                        "spaceAggregation": "max"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "todoListName",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [
+                      {
+                        "key": {
+                          "name": "__result",
+                          "signal": "",
+                          "fieldContext": "",
+                          "fieldDataType": ""
+                        },
+                        "direction": "desc"
+                      }
+                    ],
+                    "limit": 15,
+                    "legend": "{{todoListName}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "todolist-processone": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Todo item processing p95 by service",
+            "description": "Sampled 1 in 10."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ns",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "traces",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "expression": "p95(duration_nano)",
+                        "alias": "p95"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "resource.service.namespace = 'credit_app' AND resource.k8s.namespace.name = $env AND name = 'credit-app.MongoDbTodoList.processOne' AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      },
+      "wait-for-sync": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Wait for sync handlers p95 by service",
+            "description": "Event creation to every sync handler finishing: read-your-writes latency after a command. Every event, unsampled."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "ms",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": "0s"
+                }
+              },
+              "axes": {
+                "softMin": 0,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": []
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "name": "A",
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "creditapp.eventstore.wait_for_sync.bucket",
+                        "temporality": "",
+                        "timeAggregation": "",
+                        "spaceAggregation": "p95"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.namespace = 'credit_app' AND k8s.namespace.name = $env AND service.name IN $service"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "service.name",
+                        "signal": "",
+                        "fieldContext": "",
+                        "fieldDataType": ""
+                      }
+                    ],
+                    "order": [],
+                    "legend": "{{service.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": []
+        }
+      }
+    },
+    "layouts": [
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "How to read this dashboard",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 5,
+              "content": {
+                "$ref": "#/spec/panels/notes"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "HTTP",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/http-latency-percentiles"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/http-latency-p95-by-service"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/http-throughput"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/http-error-ratio"
+              }
+            },
+            {
+              "x": 0,
+              "y": 16,
+              "width": 12,
+              "height": 7,
+              "content": {
+                "$ref": "#/spec/panels/http-active-requests"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Admin portal page loads",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/page-load-percentiles"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/graphql-gateway-percentiles"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/slowest-pages"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/slowest-graphql-operations"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Public API",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/public-api-percentiles"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/public-api-throughput"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 12,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/public-api-slowest-endpoints"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Commands and repositories",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/commandbus-send-percentiles"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/repository-with-percentiles"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/slowest-commands"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/slowest-repositories"
+              }
+            },
+            {
+              "x": 0,
+              "y": 17,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/command-conflicts"
+              }
+            },
+            {
+              "x": 6,
+              "y": 17,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/repository-cache-loads"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Event bus and projections",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/event-processing-lag"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/persistent-subscription-lag"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/wait-for-sync"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/event-handler-p95"
+              }
+            },
+            {
+              "x": 0,
+              "y": 16,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/denormalizer-duration"
+              }
+            },
+            {
+              "x": 6,
+              "y": 16,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/denormalizer-slow"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Background work (todo lists)",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/todolist-pending"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/todolist-processone"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 12,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/dead-letters"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "MongoDB",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/mongo-read-latency"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/mongo-write-latency"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/mongo-slowest-collections"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 9,
+              "content": {
+                "$ref": "#/spec/panels/mongo-pool"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "kind": "Grid",
+        "spec": {
+          "display": {
+            "title": "Runtime and capacity",
+            "collapse": {
+              "open": true
+            }
+          },
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/eventloop-delay-p99"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/eventloop-utilization"
+              }
+            },
+            {
+              "x": 0,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/hpa-replicas"
+              }
+            },
+            {
+              "x": 6,
+              "y": 8,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/hpa-at-max"
+              }
+            },
+            {
+              "x": 0,
+              "y": 16,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/cpu-by-container"
+              }
+            },
+            {
+              "x": 6,
+              "y": 16,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/memory-by-container"
+              }
+            },
+            {
+              "x": 0,
+              "y": 24,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/cpu-percent-of-limit"
+              }
+            },
+            {
+              "x": 6,
+              "y": 24,
+              "width": 6,
+              "height": 8,
+              "content": {
+                "$ref": "#/spec/panels/memory-percent-of-limit"
+              }
+            },
+            {
+              "x": 0,
+              "y": 32,
+              "width": 12,
+              "height": 7,
+              "content": {
+                "$ref": "#/spec/panels/container-restarts"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "duration": "",
+    "refreshInterval": "",
+    "links": []
+  },
+  "tags": [
+    {
+      "key": "tag",
+      "value": "performance"
+    },
+    {
+      "key": "tag",
+      "value": "scalability"
+    }
+  ],
+  "image": ""
+}

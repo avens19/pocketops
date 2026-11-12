@@ -9,7 +9,7 @@ import type { SavedView } from './signoz/views';
 export function openSavedExplorer(view: SavedView, rangeParams: { last?: string; from?: string; to?: string } = {}): boolean {
   const loaded = asExplorerView(view);
   if (!loaded) return false;
-  const params = { ...rangeParams, q: loaded.expression, saved: view.id };
+  const params = { service: undefined, traceId: undefined, groupBy: undefined, op: undefined, last: undefined, from: undefined, to: undefined, ...rangeParams, q: loaded.expression, saved: view.id };
   const href = loaded.source === 'logs' ? logsHref(params) : tracesHref(params);
   explorer.loadView(view, loaded, exploreSignature(href.params));
   router.dismissTo(href);

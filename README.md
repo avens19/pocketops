@@ -54,3 +54,12 @@ Use **Saved views** in Logs, Traces, or Metrics to load views from SigNoz. **Sav
 Requires `/api/v2/saved_views` (schema `v2`). List, graph, table and value results can be previewed; trace-operator panels require the SigNoz web explorer. All query and display fields are preserved on updates. Viewer keys can load views; use a service-account key with `saved-view:create` and `saved-view:update` to save. The mock server supports in-memory saved views, reset on restart.
 
 Save controls are shown only after `/api/v1/authz/check` confirms create permission or update permission for that particular view. Checks are shared across screens and refreshed after one minute when used again. Unknown permissions (including older servers without the check endpoint) hide writes; local edits and previews remain available. Changing credentials clears cached permission decisions.
+
+
+### Dashboards
+
+The dashboard icon in each tab's header opens the shared dashboard browser. PocketOps reads `/api/v2/dashboards` (v6 specs), preserves section ordering, and shows collapsible, full-width panels. Dynamic and custom list variables and text variables share a time range across panels; dynamic **All** is sent to SigNoz as `__all__`. Panel-specific time ranges remain honored. Refresh is manual.
+
+Time-series charts, stacked bars, scalar tables, numbers and markdown text are supported for builder queries and composite builder/formula queries. All named results are rendered, with hidden formula inputs preserved in requests and per-column units applied to tables. Expand a panel for values and log/trace drilldown with resolved filters and the exact displayed time window. Formulas and metric series do not imply a span filter, so they have no trace drilldown. Unknown plugins and variable sources show an explicit unsupported state.
+
+Only visible panels load, with at most four panel requests in flight. Collapsing sections, scrolling away or leaving the dashboard cancels unused queries. Cards show four result rows/series; expanded panels show up to 200, and charts draw up to 50 series with truncation stated. This is a viewer: editing dashboards, SQL/PromQL panels, threshold styling and full web chart appearance are not supported yet. The mock server includes the Performance & Scalability fixture with illustrative results.

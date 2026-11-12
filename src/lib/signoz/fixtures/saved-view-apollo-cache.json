@@ -1,0 +1,69 @@
+{
+  "displayName": "SSR Apollo Cache Size",
+  "panelType": "graph",
+  "requestType": "time_series",
+  "queries": [
+    {
+      "type": "builder_query",
+      "spec": {
+        "name": "A",
+        "stepInterval": 0,
+        "signal": "traces",
+        "source": "",
+        "aggregations": [
+          {
+            "expression": "p90(creditapp.apollo_cache.bytes)"
+          }
+        ],
+        "disabled": false,
+        "filter": {
+          "expression": "deployment.environment in ['production'] AND name = 'apolloCache.extract'"
+        },
+        "groupBy": null,
+        "order": null,
+        "selectFields": null,
+        "secondaryAggregations": null,
+        "functions": null,
+        "legend": ""
+      }
+    }
+  ],
+  "selectedFields": [
+    {
+      "name": "service.name",
+      "signal": "traces",
+      "fieldContext": "resource",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "name",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": "string"
+    },
+    {
+      "name": "duration_nano",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    },
+    {
+      "name": "http_method",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    },
+    {
+      "name": "response_status_code",
+      "signal": "traces",
+      "fieldContext": "span",
+      "fieldDataType": ""
+    }
+  ],
+  "display": {
+    "maxLines": 0,
+    "fontSize": "",
+    "format": "",
+    "color": "#ad7f58"
+  }
+}

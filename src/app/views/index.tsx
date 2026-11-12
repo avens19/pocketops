@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { Card } from '@/components/card';
@@ -14,6 +15,7 @@ import { isViewSource, listViews } from '@/lib/signoz/views';
 export default function SavedViewsScreen() {
   const { source, last, from, to } = useLocalSearchParams<{ source: string; last?: string; from?: string; to?: string }>();
   const client = useClient();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const views = useQuery({
     queryKey: ['saved-views', client.endpoint, source],
@@ -24,7 +26,7 @@ export default function SavedViewsScreen() {
   const rows = (views.data ?? []).filter((v) => v.spec.displayName.toLowerCase().includes(search.trim().toLowerCase()));
   return (
     <FlatList data={rows} keyExtractor={(v) => v.id} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: Spacing.three, gap: Spacing.two }}
+      contentContainerStyle={{ padding: Spacing.three, paddingBottom: insets.bottom + Spacing.three, gap: Spacing.two }}
       refreshControl={<RefreshControl refreshing={views.isRefetching} onRefresh={() => void views.refetch()} />}
       ListHeaderComponent={<View style={{ gap: Spacing.two }}>
         <Stack.Screen options={{ title: `${source[0].toUpperCase()}${source.slice(1)} views` }} />

@@ -4,6 +4,10 @@
 //
 //   node tools/mock-signoz/server.mjs [port]      key: test-key
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
+
+const dashboardFixture = JSON.parse(readFileSync(new URL('../../src/lib/signoz/fixtures/dashboard-performance.json', import.meta.url), 'utf8'));
+const dashboard = { ...dashboardFixture, id: 'performance', name: 'performance', schemaVersion: 'v6' };
 
 const PORT = Number(process.argv[2] ?? 3301);
 const KEY = 'test-key';
@@ -80,6 +84,21 @@ function series(start, end, step, fn, labels = []) {
 }
 
 function queryRange(body) {
+  // Dashboard requests use the supplied fixture's query names, aggregation indexes and grouping keys.
+  // Values are illustrative; this does not attempt to evaluate formulas or filters.
+  if (body.variables) {
+    return { type: body.requestType, data: { results: body.compositeQuery.queries.filter((q) => !q.spec.disabled).map((q) => {
+      const spec = q.spec;
+      const groups = spec.groupBy ?? [];
+      const aggs = spec.aggregations ?? [{ expression: spec.expression }];
+      if (body.requestType === 'scalar') return { queryName: spec.name,
+        columns: [...groups.map((g) => ({ name: g.name, columnType: 'group' })), ...aggs.map((_, i) => ({ name: `__result_${i}`, columnType: 'aggregation', aggregationIndex: i }))],
+        data: [0, 1, 2].map((i) => [...groups.map(() => ['/home', '/applications', '/settings'][i]), ...aggs.map((a, n) => a.expression === 'count()' ? 100 + i : (i + n + 1) * 1e8)]),
+      };
+      const step = Math.max(Number(spec.stepInterval) || 60, Math.ceil((body.end - body.start) / 200000));
+      return { queryName: spec.name, aggregations: aggs.map((a, index) => ({ index, series: [0, 1].slice(0, groups.length ? 2 : 1).map((i) => series(body.start, body.end, step, (t) => 40 + 10 * i + 5 * Math.sin(t / 600000), groups.map((g) => ({ key: { name: g.name }, value: ['api', 'worker'][i] })))) })) };
+    }) } };
+  }
   const q = body.compositeQuery.queries[0];
   const spec = q.spec;
   const type = body.requestType;
@@ -210,6 +229,14 @@ createServer((req, res) => {
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
     try {
+      if (req.method === 'GET' && url.pathname === '/api/v2/dashboards') {
+        return send(200, { status: 'success', data: { dashboards: Number(url.searchParams.get('offset')) > 0 ? [] : [{ id: dashboard.id, name: dashboard.name, schemaVersion: dashboard.schemaVersion, spec: { display: dashboard.spec.display } }], total: 1 } });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/v2/dashboards/performance') return send(200, { status: 'success', data: dashboard });
+      if (req.method === 'GET' && url.pathname === '/api/v1/fields/values') {
+        const options = url.searchParams.get('name') === 'k8s.namespace.name' ? ['production', 'staging', 'main'] : ['api', 'worker', 'administrative-portal'];
+        return send(200, { status: 'success', data: { values: { stringValues: options.filter((s) => s.includes(url.searchParams.get('searchText') || '')) } } });
+      }
       if (req.method === 'POST' && url.pathname === '/api/v1/authz/check') {
         return send(200, { status: 'success', data: JSON.parse(raw).map((transaction) => ({ ...transaction, authorized: true })) });
       }

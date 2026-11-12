@@ -3,6 +3,8 @@ import { aggregateDrillClauses, aggregateQuery, aggregateRows, aggregateSeries, 
 import { explorer } from './explorer-state';
 import { asExplorerView, mergeExplorerView } from './explorer-view';
 import { clausesToExpression } from './filters';
+import apollo from './signoz/fixtures/saved-view-apollo-cache.json';
+import response from './signoz/fixtures/apollo-cache-timeseries.json';
 import slow from './signoz/fixtures/saved-view-slow-ssr.json';
 import page from './signoz/fixtures/saved-view-page-load-perf.json';
 import type { SavedView, ViewSpec } from './signoz/views';
@@ -102,4 +104,17 @@ describe('custom saved aggregates', () => {
       expect(() => configureAggregate(slow as ViewSpec, { ...options, ...extra })).toThrow();
     }
   });
+});
+
+
+it('renders the live Apollo response without labels and keeps the bytes percentile', () => {
+  const spec = apollo as ViewSpec;
+  const loaded = asExplorerView(saved(spec))!;
+  expect(loaded.aggregate?.panelType).toBe('graph');
+  const parsed = aggregateSeries(response, spec);
+  expect(parsed).toHaveLength(1);
+  expect(parsed[0].groups).toEqual({});
+  expect(parsed[0].series.name).toBe('p90(creditapp.apollo_cache.bytes)');
+  expect(parsed[0].series.points.length).toBeGreaterThan(100);
+  expect(parsed[0].series.points.every((p, i, all) => !i || p.t > all[i - 1].t)).toBe(true);
 });

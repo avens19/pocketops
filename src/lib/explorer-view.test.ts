@@ -3,10 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { router } from 'expo-router';
 import { explorer } from './explorer-state';
 import { asExplorerView, mergeExplorerView } from './explorer-view';
-import { applyRouteFilter, paramsLanded } from './explore-links';
+import { applyRouteFilter, paramsLanded, exploreSignature, type ExploreParams } from './explore-links';
 import { clausesToExpression } from './filters';
 import { openSavedExplorer } from './open-saved-view';
 import { logsQuery, spanGroupsQuery, spanListQuery } from './signoz/queries';
+import apollo from './signoz/fixtures/saved-view-apollo-cache.json';
 import migrations from './signoz/fixtures/saved-view-migrations.json';
 import cbbLookups from './signoz/fixtures/saved-view-cbb-lookups.json';
 import { savedViewQuery, viewSpecFromQuery, type ViewSpec, type SavedView } from './signoz/views';
@@ -67,6 +68,8 @@ describe('saved view explorer navigation', () => {
   });
   it('clears the view identity for unrelated route filters and when switching accounts', () => {
     openSavedExplorer(saved('logs'));
+    const destination = vi.mocked(router.dismissTo).mock.calls[0][0] as unknown as { params: ExploreParams };
+    applyRouteFilter('logs', destination.params);
     applyRouteFilter('logs', { service: 'other', n: 'other-link' });
     expect(explorer.get('logs').saved).toBeUndefined();
     openSavedExplorer(saved('logs'));
@@ -167,5 +170,40 @@ describe('server-serialized saved views', () => {
     expect(request.requestType).toBe('scalar');
     expect(request.compositeQuery.queries).toEqual(cbbLookups.queries);
     expect(request.compositeQuery.queries[2].spec.expression).toBe('B -> A');
+  });
+});
+
+
+describe('saved chart navigation handoff', () => {
+  it('ignores old screen params between loading Apollo and receiving the new route', () => {
+    const stale = { saved: 'previous-view', q: "service.name = 'old'", n: 'old', last: '3600000' };
+    applyRouteFilter('traces', stale);
+    const view: SavedView = { id: 'apollo', source: 'traces', schemaVersion: 'v2', spec: apollo as ViewSpec };
+    expect(openSavedExplorer(view, { last: '604800000' })).toBe(true);
+    const destination = vi.mocked(router.dismissTo).mock.calls[0][0] as unknown as { params: ExploreParams };
+    applyRouteFilter('traces', stale); // A store update re-renders the old tab before dismissTo lands.
+    expect(explorer.get('traces').aggregate?.queries[0].spec.aggregations).toEqual([{ expression: 'p90(creditapp.apollo_cache.bytes)' }]);
+    expect(paramsLanded('traces', stale)).toBe(false);
+    applyRouteFilter('traces', destination.params);
+    expect(explorer.get('traces').pendingRouteSig).toBeUndefined();
+    expect(paramsLanded('traces', destination.params)).toBe(true);
+    expect(explorer.get('traces').aggregate?.panelType).toBe('graph');
+    expect(destination.params.last).toBe('604800000');
+    // A real subsequent navigation must still work.
+    applyRouteFilter('traces', { q: "name = 'other'", n: 'new' });
+    expect(explorer.get('traces').aggregate).toBeUndefined();
+  });
+  it('keeps the aggregate return target when drilldown changes the route time window', () => {
+    openSavedExplorer({ id: 'apollo', source: 'traces', schemaVersion: 'v2', spec: apollo as ViewSpec });
+    const destination = vi.mocked(router.dismissTo).mock.calls[0][0] as unknown as { params: ExploreParams };
+    applyRouteFilter('traces', destination.params);
+    const next = { ...destination.params, last: undefined, from: '1000', to: '2000' };
+    explorer.stageRoute('traces', exploreSignature(next));
+    explorer.drillAggregate('traces', []);
+    applyRouteFilter('traces', destination.params);
+    applyRouteFilter('traces', next);
+    expect(explorer.get('traces').aggregateReturn?.aggregate?.panelType).toBe('graph');
+    explorer.restoreAggregate('traces');
+    expect(explorer.get('traces').aggregate?.panelType).toBe('graph');
   });
 });
