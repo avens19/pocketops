@@ -40,7 +40,7 @@ type LogsParams = ExploreParams;
 export default function LogsScreen() {
   const params = useLocalSearchParams<LogsParams>();
   // The window comes from the params too, so a new link restarts the view.
-  return <LogsView key={`${params.last}|${params.from}|${params.to}`} params={params} />;
+  return <LogsView key={`${params.saved ? params.n : ''}|${params.last}|${params.from}|${params.to}`} params={params} />;
 }
 
 function LogsView({ params }: { params: LogsParams }) {

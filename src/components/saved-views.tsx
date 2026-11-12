@@ -10,16 +10,53 @@ import { Spacing } from '@/constants/theme';
 import { useViewPermission } from '@/hooks/use-view-permission';
 import { SignozError } from '@/lib/signoz/client';
 import { viewPermissionKey, type ViewPermission } from '@/lib/signoz/permissions';
+import { explorer, useExplorer, type ExplorerSignal } from '@/lib/explorer-state';
+import { mergeExplorerView } from '@/lib/explorer-view';
+import { openSavedExplorer } from '@/lib/open-saved-view';
 import { useClient } from '@/lib/auth';
 import { RANGES, type RangeSpec } from '@/lib/signoz/queries';
-import { saveView, validateViewSpec, withViewFilter, type ViewSource, type ViewSpec } from '@/lib/signoz/views';
+import { saveView, validateViewSpec, withViewFilter, type SavedView, type ViewSource, type ViewSpec } from '@/lib/signoz/views';
 
-export function SavedViewsBar({ source, spec, range }: { source: ViewSource; spec?: ViewSpec; range?: RangeSpec }) {
+type SavedViewsBarProps = { source: ViewSource; spec?: ViewSpec; range?: RangeSpec };
+
+export function SavedViewsBar(props: SavedViewsBarProps) {
+  return props.source === 'metrics' ? <MetricSavedViewsBar {...props} /> : <ExplorerSavedViewsBar {...props} source={props.source} />;
+}
+
+function ExplorerSavedViewsBar({ source, spec, range }: SavedViewsBarProps & { source: ExplorerSignal }) {
+  const create = useViewPermission({ action: 'create' });
+  const { saved } = useExplorer(source);
+  const [draft, setDraft] = useState<{ spec: ViewSpec; baseline: ViewSpec; id?: string }>();
+  const current = spec && saved ? mergeExplorerView(saved.view, saved.baseline, spec) : spec;
+  const dirty = !!saved && current !== saved.view.spec;
+  return <View style={{ gap: Spacing.two }}>
+    {saved ? <ThemedText type="small">{saved.view.spec.displayName}{dirty ? ' · Unsaved changes' : ''}</ThemedText> : null}
+    <View style={styles.row}>
+      <Chip label="Saved views" onPress={() => router.push({ pathname: '/views', params: { source, ...viewRangeParams(range) } })} />
+      {current && spec && create.allowed ? <Chip label={saved ? 'Save a copy' : 'Save view'} onPress={() => setDraft({ spec: current, baseline: spec })} /> : null}
+      {saved && current && spec ? <UpdateViewChip id={saved.view.id} onPress={() => setDraft({ spec: current, baseline: spec, id: saved.view.id })} /> : null}
+      {dirty && saved ? <Chip label="Discard changes" onPress={() => openSavedExplorer(saved.view, viewRangeParams(range))} /> : null}
+      {saved ? <Chip label="Leave view" onPress={() => explorer.detachView(source)} /> : null}
+    </View>
+    {draft ? <SaveViewForm source={source} initial={draft.spec} id={draft.id} onClose={() => setDraft(undefined)} onSaved={(id, savedSpec) => {
+      const view: SavedView = { ...(saved?.view.id === id ? saved.view : {}), id, source, schemaVersion: 'v2', spec: savedSpec };
+      explorer.attachView(source, view, draft.baseline);
+      setDraft(undefined);
+    }} /> : null}
+  </View>;
+}
+
+function UpdateViewChip({ id, onPress }: { id: string; onPress: () => void }) {
+  const update = useViewPermission({ action: 'update', id });
+  return update.allowed ? <Chip label="Update view" onPress={onPress} /> : null;
+}
+
+function MetricSavedViewsBar({ source, spec, range }: SavedViewsBarProps) {
   const create = useViewPermission({ action: 'create' });
   const [draft, setDraft] = useState<ViewSpec>();
   return (
     <View style={styles.row}>
-      <Chip label="Saved views" onPress={() => router.push({ pathname: '/views', params: { source } })} />
+      <Chip label="Saved views" onPress={() => router.push({ pathname: '/views', params: { source, ...viewRangeParams(range) } })} />
       {spec && create.allowed ? <Chip label="Save view" onPress={() => setDraft(spec)} /> : null}
       {draft ? <SaveViewForm source={source} initial={draft} onClose={() => setDraft(undefined)} onSaved={(id) => {
         setDraft(undefined);

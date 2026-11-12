@@ -4,6 +4,8 @@ import { quote } from './signoz/queries';
 /** Route params that carry a filter into the logs or traces screen. `n` makes every navigation distinct so a repeat applies again. */
 export type ExploreParams = {
   q?: string;
+  /** Identifies a view already loaded into the explorer store. */
+  saved?: string;
   service?: string;
   traceId?: string;
   /** Comma-separated fields to group traces by (from an explorer link). */
@@ -24,11 +26,11 @@ export function expressionFromParams(p: ExploreParams): string {
 }
 
 export function hasExploreFilter(p: ExploreParams): boolean {
-  return !!(p.q || p.service || p.traceId || p.groupBy);
+  return !!(p.saved || p.q || p.service || p.traceId || p.groupBy);
 }
 
 export function exploreSignature(p: ExploreParams): string {
-  return [p.q, p.service, p.traceId, p.groupBy, p.last, p.from, p.to, p.n].join('|');
+  return [p.saved, p.q, p.service, p.traceId, p.groupBy, p.last, p.from, p.to, p.n].join('|');
 }
 
 /**

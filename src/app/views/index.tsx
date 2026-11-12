@@ -12,7 +12,7 @@ import { useClient } from '@/lib/auth';
 import { isViewSource, listViews } from '@/lib/signoz/views';
 
 export default function SavedViewsScreen() {
-  const { source } = useLocalSearchParams<{ source: string }>();
+  const { source, last, from, to } = useLocalSearchParams<{ source: string; last?: string; from?: string; to?: string }>();
   const client = useClient();
   const [search, setSearch] = useState('');
   const views = useQuery({
@@ -31,7 +31,7 @@ export default function SavedViewsScreen() {
         <SearchField value={search} onChangeText={setSearch} placeholder="Find a saved view" accessibilityLabel="Find a saved view" />
       </View>}
       ListEmptyComponent={views.isPending ? <Loading /> : views.isError ? <ErrorState error={views.error} onRetry={() => void views.refetch()} /> : <Empty title={search ? 'No matching views' : 'No saved views'} hint="Save a query from the explorer, or create a view in SigNoz." />}
-      renderItem={({ item }) => <Link href={{ pathname: '/views/[id]', params: { id: item.id } }} asChild>
+      renderItem={({ item }) => <Link href={{ pathname: '/views/[id]', params: { id: item.id, last, from, to } }} asChild>
         <Pressable accessibilityRole="button"><Card>
           <ThemedText type="heading">{item.spec.displayName}</ThemedText>
           <ThemedText type="caption">{item.spec.panelType} · {item.spec.queries.length} {item.spec.queries.length === 1 ? 'query' : 'queries'}</ThemedText>

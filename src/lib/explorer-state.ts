@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from 'react';
 
+import type { SavedView, ViewSpec } from './signoz/views';
+import type { SpanSort } from './signoz/queries';
+import type { ExplorerView } from './explorer-view';
+
 import { addClause, clausesToExpression, parseExpression, removeClause, replaceClause, type Clause } from './filters';
 
 /**
@@ -20,9 +24,11 @@ export interface ExplorerState {
   errorsOnly: boolean;
   /** Traces only: show counts per value of these fields instead of the span list. */
   groupBy: string[];
+  sort: SpanSort;
+  saved?: { view: SavedView; baseline: ViewSpec };
 }
 
-const EMPTY: ExplorerState = { clauses: [], text: '', sig: '', rootOnly: true, errorsOnly: false, groupBy: [] };
+const EMPTY: ExplorerState = { clauses: [], text: '', sig: '', rootOnly: true, errorsOnly: false, groupBy: [], sort: 'latest' };
 
 const states: Record<ExplorerSignal, ExplorerState> = { logs: EMPTY, traces: EMPTY };
 const listeners = new Set<() => void>();
@@ -41,6 +47,14 @@ function subscribe(listener: () => void) {
 
 export const explorer = {
   get: (signal: ExplorerSignal) => states[signal],
+  reset: () => { set('logs', EMPTY); set('traces', EMPTY); },
+  loadView: (view: SavedView, loaded: ExplorerView, sig: string) => set(loaded.source, {
+    ...EMPTY, clauses: parseExpression(loaded.expression), text: loaded.text, rootOnly: loaded.rootOnly, errorsOnly: loaded.errorsOnly,
+    groupBy: loaded.groupBy, sort: loaded.sort, sig, saved: { view, baseline: loaded.baseline },
+  }),
+  attachView: (signal: ExplorerSignal, view: SavedView, baseline: ViewSpec) => set(signal, { ...states[signal], saved: { view, baseline } }),
+  detachView: (signal: ExplorerSignal) => set(signal, { ...states[signal], saved: undefined }),
+  setSort: (signal: ExplorerSignal, sort: SpanSort) => set(signal, { ...states[signal], sort }),
   add: (signal: ExplorerSignal, clause: Clause) => {
     const s = states[signal];
     const clauses = addClause(s.clauses, clause);
@@ -74,7 +88,7 @@ export const explorer = {
   setExpression: (signal: ExplorerSignal, expression: string, text = '', sig?: string) => {
     const s = states[signal];
     // A query that arrives from elsewhere (a link, an alert, a service) is about specific spans: show them all, not just roots.
-    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
+    set(signal, { ...s, clauses: parseExpression(expression), text, sig: sig ?? s.sig, saved: sig === undefined ? s.saved : undefined, rootOnly: expression.trim() ? false : s.rootOnly, errorsOnly: false, groupBy: [] });
   },
   clear: (signal: ExplorerSignal) => set(signal, { ...states[signal], clauses: [], text: '' }),
   expression: (signal: ExplorerSignal) => clausesToExpression(states[signal].clauses),

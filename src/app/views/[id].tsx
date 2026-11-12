@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Stack, router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
 
 import { Card } from '@/components/card';
@@ -12,6 +12,8 @@ import { EditViewForm, SaveViewForm, viewRangeParams } from '@/components/saved-
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useViewPermission } from '@/hooks/use-view-permission';
+import { asExplorerView } from '@/lib/explorer-view';
+import { openSavedExplorer } from '@/lib/open-saved-view';
 import { useClient } from '@/lib/auth';
 import { queryRange, toLogRow } from '@/lib/signoz/api';
 import { parseRawRows, parseTimeSeries, rangeSpecFromParams, resolveRange, type RangeSpec } from '@/lib/signoz/queries';
@@ -43,7 +45,14 @@ export default function SavedViewScreen() {
   const { id } = params;
   const client = useClient();
   const view = useQuery({ queryKey: ['saved-view', client.endpoint, id], queryFn: ({ signal }) => getView(client, id, signal) });
-  if (view.isPending) return <Loading />;
+  const opened = useRef('');
+  const canOpenExplorer = !!view.data && asExplorerView(view.data) !== null;
+  useEffect(() => {
+    if (!view.data || !canOpenExplorer || opened.current === id) return;
+    opened.current = id;
+    openSavedExplorer(view.data, { last: params.last, from: params.from, to: params.to });
+  }, [view.data, canOpenExplorer, id, params.last, params.from, params.to]);
+  if (view.isPending || canOpenExplorer) return <Loading />;
   if (view.isError) return <ErrorState error={view.error} onRetry={() => void view.refetch()} />;
   return <ViewDetail key={`${client.endpoint}:${id}`} view={view.data} initialRange={rangeSpecFromParams(params) ?? { key: '1h' }} />;
 }
@@ -74,6 +83,7 @@ function ViewDetail({ view, initialRange }: { view: SavedView; initialRange: Ran
       refreshControl={<RefreshControl refreshing={results.isRefetching} onRefresh={() => { if (supported) void results.refetch(); }} />}
       ListHeaderComponent={<View style={{ gap: Spacing.two, marginBottom: Spacing.two }}>
         <ThemedText type="heading">{spec.displayName}</ThemedText>
+        {view.source !== 'metrics' ? <ThemedText type="caption">This query uses options the standard explorer can’t represent. Showing the full saved query here.</ThemedText> : null}
         <RangeChip value={range} onChange={(key) => setRange({ key })} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
           <Chip label="Edit view" onPress={() => setEditing(true)} />

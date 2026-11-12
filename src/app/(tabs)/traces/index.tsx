@@ -24,14 +24,14 @@ import { explorer, useExplorer } from '@/lib/explorer-state';
 import { clausesToExpression } from '@/lib/filters';
 import { formatCount, formatDuration } from '@/lib/format';
 import { SPAN_PAGE_SIZE, fetchSpanGroups, fetchSpans, type GroupValue, type SpanRow } from '@/lib/signoz/api';
-import { quote, rangeSpecFromParams, resolveRange, type RangeSpec, type SpanSort } from '@/lib/signoz/queries';
+import { quote, rangeSpecFromParams, resolveRange, type RangeSpec } from '@/lib/signoz/queries';
 import { serviceColor } from '@/lib/trace';
 
 type TracesParams = ExploreParams & { groupBy?: string; op?: string };
 
 export default function TracesScreen() {
   const params = useLocalSearchParams<TracesParams>();
-  return <TracesView key={`${params.last}|${params.from}|${params.to}`} params={params} />;
+  return <TracesView key={`${params.saved ? params.n : ''}|${params.last}|${params.from}|${params.to}`} params={params} />;
 }
 
 /** Spans matching a filter, one row per trace by default. Tap a row for the waterfall; tap attributes there to refine. */
@@ -39,9 +39,8 @@ function TracesView({ params }: { params: TracesParams }) {
   const client = useClient();
   const theme = useTheme();
   const [range, setRange] = useState<RangeSpec>(() => rangeSpecFromParams(params) ?? { key: '1h' });
-  const { clauses, text, sig, rootOnly, errorsOnly, groupBy } = useExplorer('traces');
+  const { clauses, text, sig, rootOnly, errorsOnly, groupBy, sort } = useExplorer('traces');
   const [groupOpen, setGroupOpen] = useState(false);
-  const [sort, setSort] = useState<SpanSort>('latest');
 
   const routeSig = exploreSignature(params);
   const landed = !hasExploreFilter(params) || sig === routeSig;
@@ -105,7 +104,7 @@ function TracesView({ params }: { params: TracesParams }) {
           onPress={() => (groupBy.length > 0 ? explorer.setGroupBy('traces', []) : setGroupOpen(true))}
         />
         <Chip label="Errors" selected={errorsOnly} onPress={() => explorer.setErrorsOnly('traces', !errorsOnly)} />
-        <Chip label="Slowest" selected={sort === 'slowest'} onPress={() => setSort((s) => (s === 'slowest' ? 'latest' : 'slowest'))} />
+        <Chip label="Slowest" selected={sort === 'slowest'} onPress={() => explorer.setSort('traces', sort === 'slowest' ? 'latest' : 'slowest')} />
         <Chip label="Root spans" selected={rootOnly} onPress={() => explorer.setRootOnly('traces', !rootOnly)} />
       </ScrollView>
       {params.op ? (
