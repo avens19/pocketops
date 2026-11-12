@@ -12,6 +12,7 @@ import { EditViewForm, SaveViewForm, viewRangeParams } from '@/components/saved-
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useViewPermission } from '@/hooks/use-view-permission';
+import { isMetricExplorerView } from '@/lib/metric-view';
 import { asExplorerView } from '@/lib/explorer-view';
 import { openSavedExplorer } from '@/lib/open-saved-view';
 import { useClient } from '@/lib/auth';
@@ -46,7 +47,7 @@ export default function SavedViewScreen() {
   const client = useClient();
   const view = useQuery({ queryKey: ['saved-view', client.endpoint, id], queryFn: ({ signal }) => getView(client, id, signal) });
   const opened = useRef('');
-  const canOpenExplorer = !!view.data && asExplorerView(view.data) !== null;
+  const canOpenExplorer = !!view.data && (isMetricExplorerView(view.data) || asExplorerView(view.data) !== null);
   useEffect(() => {
     if (!view.data || !canOpenExplorer || opened.current === id) return;
     opened.current = id;

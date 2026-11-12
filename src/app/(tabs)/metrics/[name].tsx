@@ -9,19 +9,22 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
 import { LineChart } from '@/components/line-chart';
-import { ErrorState, Loading } from '@/components/query-state';
-import { RangePicker } from '@/components/range-picker';
+import { Empty, ErrorState, Loading } from '@/components/query-state';
+import { RangeChip } from '@/components/range-chip';
+import { useWindowAnchor } from '@/hooks/use-window-anchor';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useClient } from '@/lib/auth';
 import { formatUnit } from '@/lib/format';
 import { fetchMetricLabels, fetchMetricSeries, listMetrics } from '@/lib/signoz/api';
-import { metricAggregations, rangeFor, type MetricGroup, type RangeKey } from '@/lib/signoz/queries';
+import { metricAggregations, rangeFor, type MetricGroup, rangeSpecFromParams, resolveRange, type RangeSpec } from '@/lib/signoz/queries';
 
 export default function MetricDetailScreen() {
-  const params = useLocalSearchParams<{ name: string; type?: string; monotonic?: string; unit?: string }>();
+  const params = useLocalSearchParams<{ name: string; type?: string; monotonic?: string; unit?: string; from?: string; to?: string; last?: string }>();
   const client = useClient();
-  const [rangeKey, setRangeKey] = useState<RangeKey>('1h');
+  const [range, setRange] = useState<RangeSpec>(() => rangeSpecFromParams(params) ?? { key: '1h' });
+  const insets = useSafeAreaInsets();
   const [groupBy, setGroupBy] = useState<MetricGroup | undefined>();
   const [aggregation, setAggregation] = useState<string | undefined>();
 
@@ -49,11 +52,13 @@ export default function MetricDetailScreen() {
   const choices = type ? metricAggregations(type, monotonic) : [];
   const activeAggregation = choices.find((c) => c.key === aggregation) ?? choices[0];
 
+  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, groupBy, activeAggregation?.key]));
+  const resolved = resolveRange(range, anchor);
   const series = useQuery({
-    queryKey: ['metric-series', client.endpoint, params.name, type, rangeKey, groupBy, activeAggregation?.key],
+    queryKey: ['metric-series', client.endpoint, params.name, type, resolved, groupBy, activeAggregation?.key],
     enabled: !!type,
     queryFn: ({ signal }) =>
-      fetchMetricSeries(client, rangeFor(rangeKey), { name: params.name, type: type!, isMonotonic: monotonic }, { groupBy, aggregation: activeAggregation?.key }, signal),
+      fetchMetricSeries(client, resolved, { name: params.name, type: type!, isMonotonic: monotonic }, { groupBy, aggregation: activeAggregation?.key }, signal),
   });
 
   // A rate is per second; everything else is in the metric's own unit.
@@ -62,8 +67,8 @@ export default function MetricDetailScreen() {
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={series.isRefetching} onRefresh={() => void series.refetch()} />}>
+      contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.three }]}
+      refreshControl={<RefreshControl refreshing={series.isRefetching} onRefresh={refresh} />}>
       <Stack.Screen options={{ title: params.name }} />
 
       <View style={styles.meta}>
@@ -76,8 +81,8 @@ export default function MetricDetailScreen() {
         </ThemedText>
       </View>
 
-      <SavedViewsBar source="metrics" range={{ key: rangeKey }} spec={type ? viewSpecFromQuery('metrics', metricSeriesQuery(rangeFor(rangeKey), params.name, type, { monotonic, groupBy, aggregation: activeAggregation?.key })) : undefined} />
-      <RangePicker value={rangeKey} onChange={setRangeKey} />
+      <SavedViewsBar source="metrics" range={range} spec={type ? viewSpecFromQuery('metrics', metricSeriesQuery(resolved, params.name, type, { monotonic, groupBy, aggregation: activeAggregation?.key })) : undefined} />
+      <RangeChip value={range} onChange={(key) => setRange({ key })} />
 
       {choices.length > 1 ? (
         <View style={styles.row}>
@@ -107,6 +112,8 @@ export default function MetricDetailScreen() {
       <Card>
         {info.isError ? (
           <ErrorState error={info.error} onRetry={() => info.refetch()} />
+        ) : !type && info.isSuccess ? (
+          <Empty title="Metric metadata unavailable" hint="This metric may not have reported recently. The saved view can still run its original query." />
         ) : !type || series.isPending ? (
           <Loading />
         ) : series.isError ? (

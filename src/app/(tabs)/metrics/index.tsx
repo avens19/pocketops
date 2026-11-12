@@ -1,3 +1,4 @@
+import { MetricSavedExplorer, type MetricViewParams } from '@/components/metric-saved-explorer';
 import { SavedViewsBar } from '@/components/saved-views';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
@@ -20,6 +21,12 @@ import type { MetricInfo } from '@/lib/signoz/types';
 
 /** Metrics browse like folders: this screen is pushed again for each group, with `prefix` set to where it opened. */
 export default function MetricsScreen() {
+  const params = useLocalSearchParams<MetricViewParams>();
+  if (params.saved) return <MetricSavedExplorer params={params} />;
+  return <MetricsBrowser />;
+}
+
+function MetricsBrowser() {
   const client = useClient();
   const theme = useTheme();
   const { prefix: requested = '' } = useLocalSearchParams<{ prefix?: string }>();
@@ -58,7 +65,7 @@ export default function MetricsScreen() {
 
   return (
     <>
-      {prefix || requested ? <Stack.Screen options={{ title: prefix || requested, headerLargeTitleEnabled: false }} /> : null}
+      <Stack.Screen options={{ title: prefix || requested || 'Metrics', headerLargeTitleEnabled: !prefix && !requested }} />
       <FlatList
         data={entries}
         keyExtractor={(e) => (e.kind === 'group' ? `g:${e.prefix}` : `m:${e.metric.name}`)}
@@ -89,7 +96,7 @@ export default function MetricsScreen() {
 function GroupRow({ entry }: { entry: Extract<MetricEntry<MetricInfo>, { kind: 'group' }> }) {
   const theme = useTheme();
   return (
-    <Link href={{ pathname: '/metrics', params: { prefix: entry.prefix } }} push asChild>
+    <Link href={{ pathname: '/metrics', params: { prefix: entry.prefix, saved: undefined } }} push asChild>
       <Pressable accessibilityRole="button" accessibilityLabel={`${entry.label}, ${entry.count} metrics`}>
         <Card style={styles.groupRow}>
           <View style={styles.groupText}>
