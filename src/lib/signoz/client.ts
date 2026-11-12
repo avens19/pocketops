@@ -87,7 +87,7 @@ function kindForStatus(status: number): ErrorKind {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PUT';
   query?: Record<string, string | number | undefined>;
   body?: unknown;
   signal?: AbortSignal;
@@ -163,6 +163,8 @@ export class SignozClient {
       throw new SignozError(message, kind, response.status);
     }
 
+    if (response.status === 204) return undefined as T;
+
     if (json === undefined) {
       // A 200 that is not JSON is almost always a login page or a proxy answering in SigNoz's place.
       throw new SignozError('The server did not answer like SigNoz. Is the URL right?', 'unknown', response.status);
@@ -170,7 +172,7 @@ export class SignozClient {
     if (json && typeof json === 'object' && 'status' in json) {
       const env = json as { status?: string; data?: unknown };
       if (env.status === 'error') throw new SignozError(messageFromBody(json) ?? 'SigNoz reported an error.', 'server');
-      return (env.data ?? json) as T;
+      return ('data' in env ? env.data : json) as T;
     }
     return json as T;
   }

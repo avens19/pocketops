@@ -191,6 +191,9 @@ const routes = {
   }),
 };
 
+const savedViews = new Map();
+let nextViewId = 1;
+
 createServer((req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`);
   const send = (status, body) => {
@@ -207,6 +210,33 @@ createServer((req, res) => {
   req.on('data', (c) => (raw += c));
   req.on('end', () => {
     try {
+      if (req.method === 'POST' && url.pathname === '/api/v1/authz/check') {
+        return send(200, { status: 'success', data: JSON.parse(raw).map((transaction) => ({ ...transaction, authorized: true })) });
+      }
+      if (url.pathname === '/api/v2/saved_views') {
+        if (req.method === 'GET') return send(200, { status: 'success', data: [...savedViews.values()].filter((v) => !url.searchParams.has('source') || v.source === url.searchParams.get('source')) });
+        if (req.method === 'POST') {
+          const body = JSON.parse(raw);
+          if (!body.spec?.displayName?.trim() || body.schemaVersion !== 'v2' || !body.spec.queries?.length) return send(400, { error: 'Invalid saved view' });
+          const id = `view-${nextViewId++}`;
+          savedViews.set(id, { id, name: id, source: body.source, schemaVersion: body.schemaVersion, spec: body.spec, updatedAt: new Date().toISOString() });
+          return send(201, { status: 'success', data: { id } });
+        }
+      }
+      const viewMatch = url.pathname.match(/^\/api\/v2\/saved_views\/([^/]+)$/);
+      if (viewMatch) {
+        const id = decodeURIComponent(viewMatch[1]);
+        const view = savedViews.get(id);
+        if (!view) return send(404, { error: 'View not found' });
+        if (req.method === 'GET') return send(200, { status: 'success', data: view });
+        if (req.method === 'PUT') {
+          const body = JSON.parse(raw);
+          if (!body.spec?.displayName?.trim() || body.schemaVersion !== 'v2' || !body.spec.queries?.length) return send(400, { error: 'Invalid saved view' });
+          savedViews.set(id, { ...view, source: body.source, schemaVersion: body.schemaVersion, spec: body.spec, updatedAt: new Date().toISOString() });
+          res.writeHead(204);
+          return res.end();
+        }
+      }
       if (req.method === 'POST' && url.pathname === '/api/v5/query_range') {
         return send(200, { status: 'success', data: queryRange(JSON.parse(raw)) });
       }

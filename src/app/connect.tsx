@@ -121,7 +121,7 @@ export default function ConnectScreen() {
             />
             <ThemedText type="caption">
               To make a key: in SigNoz open Settings → Service Accounts, create an account with the Viewer role, then add a key
-              and copy it here. A Viewer key keeps this app read-only. The key is stored in this device&apos;s secure storage
+              and copy it here. A Viewer key allows browsing. Saving views requires saved-view create/update permissions. The key is stored in this device&apos;s secure storage
               and sent only to your server.
             </ThemedText>
           </View>

@@ -1,9 +1,9 @@
 # PocketOps
 
-A read-only mobile client (iOS + Android) for [SigNoz](https://signoz.io): alerts, logs, services (APM), metrics, and a
+A mobile client (iOS + Android) for [SigNoz](https://signoz.io): alerts, logs, services (APM), metrics, and a
 "paste a SigNoz link" tab that opens the matching screen. Independent project, not affiliated with SigNoz.
 
-You connect with a server URL and a SigNoz **service-account API key** (Viewer role is enough). There is no login flow.
+You connect with a server URL and a SigNoz **service-account API key** (Viewer role is enough for browsing; saving views needs saved-view create/update permissions). There is no login flow.
 The key is stored in the device keychain/keystore.
 
 Built with Expo SDK 58, Expo Router, and TanStack Query. Builds are local only (`eas build --local`); JS changes ship
@@ -46,3 +46,11 @@ development convenience only (it keeps credentials in localStorage); the app tar
 
 See [HANDOFF.md](./HANDOFF.md) for status, what is verified, and what to do next. See [AGENTS.md](./AGENTS.md) for
 project conventions.
+
+## Saved views
+
+Use **Saved views** in Logs, Traces, or Metrics to load views from SigNoz. **Save view** saves the current log/span query or metric chart, including filters, aggregation, grouping and sort order. In a loaded view, **Edit view** previews local changes; **Update view** replaces the shared server view and **Save a copy** creates another. Filters have a text editor; advanced editing supports the full query specification. Time ranges are session controls and are not stored by SigNoz's saved-view API.
+
+Requires `/api/v2/saved_views` (schema `v2`). List, graph, table and value results can be previewed; trace-operator panels require the SigNoz web explorer. All query and display fields are preserved on updates. Viewer keys can load views; use a service-account key with `saved-view:create` and `saved-view:update` to save. The mock server supports in-memory saved views, reset on restart.
+
+Save controls are shown only after `/api/v1/authz/check` confirms create permission or update permission for that particular view. Checks are shared across screens and refreshed after one minute when used again. Unknown permissions (including older servers without the check endpoint) hide writes; local edits and previews remain available. Changing credentials clears cached permission decisions.

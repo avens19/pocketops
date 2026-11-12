@@ -1,3 +1,6 @@
+import { SavedViewsBar } from '@/components/saved-views';
+import { viewSpecFromQuery } from '@/lib/signoz/views';
+import { metricSeriesQuery } from '@/lib/signoz/queries';
 import { useQuery } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
@@ -73,6 +76,7 @@ export default function MetricDetailScreen() {
         </ThemedText>
       </View>
 
+      <SavedViewsBar source="metrics" range={{ key: rangeKey }} spec={type ? viewSpecFromQuery('metrics', metricSeriesQuery(rangeFor(rangeKey), params.name, type, { monotonic, groupBy, aggregation: activeAggregation?.key })) : undefined} />
       <RangePicker value={rangeKey} onChange={setRangeKey} />
 
       {choices.length > 1 ? (

@@ -26,12 +26,13 @@ interface FilterEditorProps {
   onSubmit: (clause: Clause) => void;
 }
 
-function Sheet({ visible, title, onClose, onApply, canApply, children }: {
+export function Sheet({ visible, title, onClose, onApply, canApply, applyLabel = 'Apply', children }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   onApply: () => void;
   canApply: boolean;
+  applyLabel?: string;
   children: React.ReactNode;
 }) {
   const theme = useTheme();
@@ -46,7 +47,7 @@ function Sheet({ visible, title, onClose, onApply, canApply, children }: {
           <ThemedText type="heading">{title}</ThemedText>
           <Pressable accessibilityRole="button" accessibilityState={{ disabled: !canApply }} disabled={!canApply} onPress={onApply} hitSlop={8} style={[styles.headerSide, styles.headerRight]}>
             <ThemedText color={canApply ? 'accent' : 'textSecondary'} style={styles.bold}>
-              Apply
+              {applyLabel}
             </ThemedText>
           </Pressable>
         </View>
@@ -58,7 +59,7 @@ function Sheet({ visible, title, onClose, onApply, canApply, children }: {
   );
 }
 
-function Field({ label, ...props }: { label: string } & React.ComponentProps<typeof TextInput>) {
+export function Field({ label, ...props }: { label: string } & React.ComponentProps<typeof TextInput>) {
   const theme = useTheme();
   return (
     <View style={styles.field}>

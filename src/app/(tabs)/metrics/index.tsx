@@ -1,3 +1,4 @@
+import { SavedViewsBar } from '@/components/saved-views';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
@@ -68,6 +69,7 @@ export default function MetricsScreen() {
         refreshControl={<RefreshControl refreshing={metrics.isRefetching} onRefresh={() => void metrics.refetch()} />}
         ListHeaderComponent={
           <View style={styles.header}>
+            <SavedViewsBar source="metrics" />
             <SearchField
               value={query}
               onChangeText={setQuery}

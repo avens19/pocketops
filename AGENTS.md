@@ -37,7 +37,7 @@ Docs: https://docs.expo.dev/eas/index.md
 
 ## SigNoz API
 
-- Auth is a `SIGNOZ-API-KEY` header carrying a service-account key; a Viewer role is enough and the app is read-only.
+- Auth is a `SIGNOZ-API-KEY` header carrying a service-account key; a Viewer role is enough for browsing; saving shared views requires saved-view create/update permissions.
 - Endpoints and response shapes come from `docs/api/openapi.yml` in the SigNoz repo, not from their docs site, which omits most response models. Those endpoints are marked `alpha`, so expect drift; `src/lib/signoz/api.ts` falls back across rule-list generations (`/api/v3/rules` → `v2` → `v1`).
 - `tools/mock-signoz/server.mjs` is a fixture server (key `test-key`, default port 3301; from the Android emulator use `http://10.0.2.2:3301`). It is shaped after the spec, so it cannot catch a disagreement between the spec and a real server.
 - Plain `http` is accepted only for private-network hosts (`isPrivateHost` in `src/lib/signoz/client.ts`).

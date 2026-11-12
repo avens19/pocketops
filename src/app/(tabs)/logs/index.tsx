@@ -1,3 +1,6 @@
+import { viewSpecFromQuery } from '@/lib/signoz/views';
+import { logsQuery } from '@/lib/signoz/queries';
+import { SavedViewsBar } from '@/components/saved-views';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -96,6 +99,7 @@ function LogsView({ params }: { params: LogsParams }) {
 
   const header = (
     <View style={styles.header}>
+      <SavedViewsBar source="logs" range={range} spec={viewSpecFromQuery('logs', logsQuery(resolved, { ...filter, text: text.trim() }, LOG_PAGE_SIZE, 0))} />
       <SearchField
         value={text}
         onChangeText={(t) => explorer.setText('logs', t)}

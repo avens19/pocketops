@@ -1,3 +1,6 @@
+import { viewSpecFromQuery } from '@/lib/signoz/views';
+import { spanGroupsQuery, spanListQuery } from '@/lib/signoz/queries';
+import { SavedViewsBar } from '@/components/saved-views';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Link, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -48,7 +51,7 @@ function TracesView({ params }: { params: TracesParams }) {
 
   const searchText = useDebounced(text.trim(), 400);
   const filterExpression = clausesToExpression(clauses);
-  const expression = [
+  const buildExpression = (searchText: string) => [
     rootOnly ? 'isRoot = true' : '',
     errorsOnly ? 'has_error = true' : '',
     filterExpression ? `(${filterExpression})` : '',
@@ -56,6 +59,7 @@ function TracesView({ params }: { params: TracesParams }) {
   ]
     .filter(Boolean)
     .join(' AND ');
+  const expression = buildExpression(searchText);
 
   const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, expression, sort]));
   const resolved = resolveRange(range, anchor);
@@ -90,6 +94,7 @@ function TracesView({ params }: { params: TracesParams }) {
 
   const header = (
     <View style={styles.header}>
+      <SavedViewsBar source="traces" range={range} spec={viewSpecFromQuery('traces', groupBy.length ? spanGroupsQuery(resolved, buildExpression(text.trim()), groupBy) : spanListQuery(resolved, buildExpression(text.trim()), SPAN_PAGE_SIZE, 0, sort))} />
       <SearchField value={text} onChangeText={(t) => explorer.setText('traces', t)} placeholder="Search span names" />
       <FilterBar signal="traces" range={resolved} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
