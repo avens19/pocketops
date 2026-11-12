@@ -84,6 +84,7 @@ function series(start, end, step, fn, labels = []) {
 }
 
 function queryRange(body) {
+  if (body.compositeQuery.queries.some((q) => q.type === 'builder_formula' && Object.hasOwn(q.spec, 'stepInterval'))) throw new Error('unknown field "stepInterval" in formula spec');
   // Dashboard requests use the supplied fixture's query names, aggregation indexes and grouping keys.
   // Values are illustrative; this does not attempt to evaluate formulas or filters.
   if (body.variables) {

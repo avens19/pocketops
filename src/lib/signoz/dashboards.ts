@@ -115,6 +115,6 @@ export function dashboardPanelRequest(panel: DashboardPanel, variables: Dashboar
   const range = panelRange(panel, globalRange);
   const { requestType, queries } = panelQueries(panel);
   return { schemaVersion: 'v1', requestType, start: range.startMs, end: range.endMs, variables, compositeQuery: { queries: queries.map((q): QueryEnvelope => ({ ...q, spec: {
-    ...q.spec, ...(requestType === 'time_series' && (q.spec.stepInterval == null || q.spec.stepInterval === 0) ? { stepInterval: stepSeconds(range) } : {}),
+    ...q.spec, ...(q.type === 'builder_query' && requestType === 'time_series' && (q.spec.stepInterval == null || q.spec.stepInterval === 0) ? { stepInterval: stepSeconds(range) } : {}),
   } })) } };
 }

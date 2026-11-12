@@ -48,6 +48,19 @@ describe('dashboard API and complete performance export', () => {
     expect(formula.compositeQuery.queries[0].spec.stepInterval).toBe(60);
     expect(JSON.stringify(dashboard)).toBe(original);
   });
+  it.each(['http-error-ratio', 'cpu-percent-of-limit', 'memory-percent-of-limit', 'hpa-at-max'])('adds automatic steps only to builder inputs in %s', (id) => {
+    const original = panelQueries(panel(id)).queries;
+    const request = dashboardPanelRequest(panel(id), variables, range);
+    for (const [index, query] of request.compositeQuery.queries.entries()) {
+      if (query.type === 'builder_formula') {
+        expect(query).toEqual(original[index]);
+        expect(query.spec).not.toHaveProperty('stepInterval');
+      } else {
+        expect(query.spec.stepInterval).toBe(60);
+        expect(query.spec.disabled).toBe(true);
+      }
+    }
+  });
   it('keeps dynamic All server-side and handles single/multiple defaults', () => {
     expect(variables).toEqual({ env: { type: 'dynamic', value: 'production' }, service: { type: 'dynamic', value: '__all__' } });
     expect(dashboardPanelRequest(panel('http-throughput'), variables, range).variables).toBe(variables);
