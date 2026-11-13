@@ -99,6 +99,20 @@ describe('dashboard API and complete performance export', () => {
     p.spec.plugin.kind = 'signoz/TimeSeriesPanel'; p.spec.queries[0].kind = 'raw';
     expect(() => panelQueries(p)).toThrow('query type');
   });
+  it('runs PromQL panels with an automatic step and names series by legend', () => {
+    const p: Dashboard['spec']['panels'][string] = { kind: 'Panel', spec: { plugin: { kind: 'signoz/TimeSeriesPanel', spec: {} }, queries: [{ kind: 'time_series', spec: { name: 'A', plugin: { kind: 'signoz/CompositeQuery', spec: { queries: [
+      { type: 'promql', spec: { name: 'A', query: 'sum by (todoListName) (x{"k8s.namespace.name"="$env"})', legend: '{{todoListName}}', step: 0, disabled: false } },
+      { type: 'promql', spec: { name: 'B', query: 'max(y)', legend: 'asked', step: 120, disabled: false } },
+    ] } } } }] } };
+    const request = dashboardPanelRequest(p, variables, range);
+    expect(request.requestType).toBe('time_series');
+    expect(request.compositeQuery.queries.map((q) => q.spec.step)).toEqual([60, 120]);
+    expect(request.variables).toBe(variables);
+    const series = (name: string, labels: Record<string, string>) => ({ queryName: name, aggregations: [{ index: 0, series: [{ labels: Object.entries(labels).map(([k, value]) => ({ key: { name: k }, value })), values: [{ timestamp: 1000, value: 2 }] }] }] });
+    const parsed = dashboardResults(p, { data: { results: [series('A', { todoListName: 'Paystubs' }), series('B', {})] } });
+    expect(parsed.series.map((s) => s.series.name)).toEqual(['Paystubs', 'asked']);
+    expect(drillExpression(parsed.series[0].query, variables, parsed.series[0].groups)).toBeNull();
+  });
 });
 
 describe('dashboard rendering and trace drilldown', () => {

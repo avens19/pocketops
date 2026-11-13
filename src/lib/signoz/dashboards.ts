@@ -98,7 +98,7 @@ export function panelQueries(panel: DashboardPanel): { requestType: 'scalar' | '
     if (plugin.kind === 'signoz/CompositeQuery' && Array.isArray(plugin.spec.queries)) return plugin.spec.queries as QueryEnvelope[];
     throw new Error('This query plugin is not supported. Open it in SigNoz.');
   });
-  if (!queries.length || queries.some((q) => !['builder_query', 'builder_formula'].includes(q.type))) throw new Error('This query type is not supported.');
+  if (!queries.length || queries.some((q) => !['builder_query', 'builder_formula', 'promql'].includes(q.type))) throw new Error('This query type is not supported.');
   const names = queries.map((q) => q.spec.name);
   if (new Set(names).size !== names.length) throw new Error('This panel uses duplicate query names. Open it in SigNoz.');
   return { requestType: types.has('scalar') ? 'scalar' : 'time_series', queries };
@@ -116,5 +116,7 @@ export function dashboardPanelRequest(panel: DashboardPanel, variables: Dashboar
   const { requestType, queries } = panelQueries(panel);
   return { schemaVersion: 'v1', requestType, start: range.startMs, end: range.endMs, variables, compositeQuery: { queries: queries.map((q): QueryEnvelope => ({ ...q, spec: {
     ...q.spec, ...(q.type === 'builder_query' && requestType === 'time_series' && (q.spec.stepInterval == null || q.spec.stepInterval === 0) ? { stepInterval: stepSeconds(range) } : {}),
+    // PromQL's step is its own field (seconds); a saved 0 means automatic, as for builder queries.
+    ...(q.type === 'promql' && (q.spec.step == null || q.spec.step === 0) ? { step: stepSeconds(range) } : {}),
   } })) } };
 }

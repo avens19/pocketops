@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Chip } from './chip';
-import { LineChart } from './line-chart';
+import { LineChart, readoutTime } from './line-chart';
 import { ErrorState, Loading } from './query-state';
 import { ThemedText } from './themed-text';
 import { useTheme } from '@/hooks/use-theme';
@@ -41,6 +42,10 @@ export function DashboardPanel({ dashboardId, panelId, panel, variables, range, 
   const show = expanded ? 200 : 4;
   const chart = request?.requestType === 'time_series';
   const chartSeries = parsed.series.slice(0, 50).map((s) => s.series);
+  // A picked time stays after the finger lifts, so the values below can be scrolled to and read; a refetch that drops the bucket returns to latest.
+  const [picked, setPicked] = useState<number | null>(null);
+  const at = picked !== null && chartSeries.some((s) => s.points.some((p) => p.t === picked)) ? picked : null;
+  const valueAt = (points: { t: number; v: number }[]) => at === null ? points.at(-1) : points.find((p) => p.t === at);
   return <View style={{ gap: 10 }}>
     <Pressable accessibilityRole={expanded ? 'header' : 'button'} onPress={expanded ? undefined : open}>
       <ThemedText type="heading">{panel.spec.display?.name || panelId}</ThemedText>
@@ -48,11 +53,15 @@ export function DashboardPanel({ dashboardId, panelId, panel, variables, range, 
     </Pressable>
     {queryRangeForPanel.startMs !== range.startMs ? <ThemedText type="caption">Panel range: {new Date(queryRangeForPanel.startMs).toLocaleString()} – {new Date(queryRangeForPanel.endMs).toLocaleString()}</ThemedText> : null}
     {text ? <MarkdownText text={String(panel.spec.plugin.spec.text ?? '')} /> : problem ? <ErrorState error={problem} /> : result.isError ? <ErrorState error={result.error} onRetry={() => void result.refetch()} /> : result.isPending ? enabled ? <Loading /> : <ThemedText type="caption">Loads when visible</ThemedText> : <>
-      {chart ? <LineChart series={chartSeries} height={expanded ? 260 : 160} format={format} variant={panel.spec.plugin.kind === 'signoz/BarChartPanel' ? 'stacked-bars' : 'line'} /> : null}
+      {chart ? <LineChart series={chartSeries} height={expanded ? 260 : 160} format={format} variant={panel.spec.plugin.kind === 'signoz/BarChartPanel' ? 'stacked-bars' : 'line'} cursor={at} onCursorChange={setPicked} /> : null}
+      {chart && chartSeries.some((s) => s.points.length) ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 34 }}>
+        <ThemedText type="caption" style={{ flex: 1 }}>{at === null ? 'Latest values. Touch the chart to pick a time.' : `Values at ${readoutTime(at)}`}</ThemedText>
+        {at !== null ? <Chip label="Back to latest" onPress={() => setPicked(null)} /> : null}
+      </View> : null}
       {chart && parsed.series.length > 50 ? <ThemedText type="caption">Chart shows the first 50 of {parsed.series.length} series.</ThemedText> : null}
       {chart ? parsed.series.slice(0, show).map((s, i) => {
         const expression = drillExpression(s.query, variables, s.groups);
-        return <View key={i} style={{ gap: 4 }}><ThemedText type="small" style={{ color: palette[i % palette.length] }}>{s.series.name}: {s.series.points.length ? format(s.series.points.at(-1)!.v) : '—'}</ThemedText>
+        return <View key={i} style={{ gap: 4 }}><ThemedText type="small" style={{ color: palette[i % palette.length] }}>{s.series.name}: {(() => { const p = valueAt(s.series.points); return p ? format(p.v) : '—'; })()}</ThemedText>
           {expanded && expression !== null ? <Chip label={`Explore ${s.query.spec.signal}`} onPress={() => drill(s.query, expression)} /> : null}
         </View>;
       }) : parsed.rows.slice(0, show).map((row, i) => {

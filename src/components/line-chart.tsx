@@ -16,6 +16,12 @@ interface LineChartProps {
   format?: (v: number) => string;
   /** Show a legend row for multi-series charts. */
   legend?: boolean;
+  /**
+   * Controlled cursor: a selection that stays after the finger lifts, so the caller can show the values at that time
+   * elsewhere (and offer a way back to the latest). Without `onCursorChange` the chart shows its own readout and clears on release.
+   */
+  cursor?: number | null;
+  onCursorChange?: (t: number | null) => void;
 }
 
 const PAD_TOP = 8;
@@ -30,14 +36,17 @@ function timeLabel(t: number, spanMs: number): { time: string; day?: string } {
   return spanMs > 6 * 3_600_000 ? { time, day: d.toLocaleDateString(undefined, { weekday: 'short' }) } : { time };
 }
 
-function readoutTime(t: number): string {
+export function readoutTime(t: number): string {
   return new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-export function LineChart({ series, height = 140, format = formatValue, legend, variant = 'line' }: LineChartProps) {
+export function LineChart({ series, height = 140, format = formatValue, legend, variant = 'line', cursor: controlledCursor, onCursorChange }: LineChartProps) {
   const theme = useTheme();
   const [width, setWidth] = useState(0);
-  const [cursor, setCursor] = useState<number | null>(null);
+  const [ownCursor, setOwnCursor] = useState<number | null>(null);
+  const controlled = onCursorChange !== undefined;
+  const cursor = controlled ? (controlledCursor ?? null) : ownCursor;
+  const setCursor = controlled ? onCursorChange : setOwnCursor;
   const palette = [theme.accent, theme.info, theme.success, theme.warning, theme.danger];
 
   const points = series.flatMap((s) => s.points);
@@ -68,12 +77,13 @@ export function LineChart({ series, height = 140, format = formatValue, legend, 
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 3,
         onPanResponderTerminationRequest: () => true,
-        onPanResponderGrant: (e) => setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })),
-        onPanResponderMove: (e) => setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })),
-        onPanResponderRelease: () => setCursor(null),
-        onPanResponderTerminate: () => setCursor(null),
+        // A kept selection moves only on a horizontal drag or a finished tap, so a page scroll that starts on the chart leaves it alone.
+        onPanResponderGrant: (e) => { if (!controlled) setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })); },
+        onPanResponderMove: (e, g) => { if (!controlled || Math.abs(g.dx) > Math.abs(g.dy)) setCursor(nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times })); },
+        onPanResponderRelease: (e) => setCursor(controlled ? nearestTime(e.nativeEvent.locationX, { plotW, tMin, tSpan, times }) : null),
+        onPanResponderTerminate: () => { if (!controlled) setCursor(null); },
       }),
-    [plotW, tMin, tSpan, times],
+    [plotW, tMin, tSpan, times, controlled, setCursor],
   );
 
   // A chart is a picture; this is what it says, for a screen reader.
@@ -89,7 +99,7 @@ export function LineChart({ series, height = 140, format = formatValue, legend, 
 
   return (
     <View>
-      <View style={styles.readout}>
+      {controlled ? null : <View style={styles.readout}>
         {cursor !== null ? (
           <>
             <ThemedText type="caption">{readoutTime(cursor)}</ThemedText>
@@ -103,7 +113,7 @@ export function LineChart({ series, height = 140, format = formatValue, legend, 
         ) : (
           <ThemedText type="caption">{hasData ? 'Touch the chart to read a value' : ' '}</ThemedText>
         )}
-      </View>
+      </View>}
       <View accessible accessibilityRole="image" accessibilityLabel={summary} style={{ height }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} {...pan.panHandlers}>
         {width > 0 ? (
           <Svg width={width} height={height} pointerEvents="none">

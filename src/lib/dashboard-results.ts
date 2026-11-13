@@ -29,10 +29,14 @@ export function dashboardResults(panel: DashboardPanel, data?: QueryRangeData) {
     if (!query) throw new Error('The server returned a result with an unknown query name.');
     if (query.spec.disabled === true) continue;
     const view = viewForQuery(query);
-    for (const s of aggregateSeries({ data: { results: [result] } }, view)) {
-      series.push({ ...s, query, series: { ...s.series, name: queries.filter((q) => !q.spec.disabled).length > 1 ? `${query.spec.name} · ${s.series.name}` : s.series.name } });
-    }
     const aggs = (query.spec.aggregations ?? []) as Aggregation[];
+    const legend = typeof query.spec.legend === 'string' ? query.spec.legend.trim() : '';
+    for (const s of aggregateSeries({ data: { results: [result] } }, view)) {
+      // A legend is the whole series name, as in SigNoz; without one, the query name tells composite results apart.
+      const name = legend && aggs.length <= 1 ? legend.replace(/\{\{([^}]+)\}\}/g, (_, key: string) => String(s.groups[key.trim()] ?? '(not set)'))
+        : queries.filter((q) => !q.spec.disabled).length > 1 ? `${query.spec.name} · ${s.series.name}` : s.series.name;
+      series.push({ ...s, query, series: { ...s.series, name } });
+    }
     const groupNames = ((query.spec.groupBy ?? []) as { name: string }[]).map((g) => g.name);
     for (const row of result.data ?? []) {
       const groups: Record<string, unknown> = {};
