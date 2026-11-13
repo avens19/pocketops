@@ -1,34 +1,39 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>PocketOps: a read-only SigNoz client for iOS and Android</title>
-<link rel="icon" href="/icon.png">
-<style>
-:root{color-scheme:light dark;--bg:#fff;--fg:#1b1d22;--mut:#5b616c;--acc:#c2410c;--on:#fff}
-@media(prefers-color-scheme:dark){:root{--bg:#0e1013;--fg:#eceef1;--mut:#9aa1ad;--acc:#ff8a3d;--on:#1b1d22}}
-body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
-main{max-width:42rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
-h1{font-size:2rem;margin:.2rem 0 .5rem}h2{font-size:1.2rem;margin-top:2rem}
-a{color:var(--acc)}.mut{color:var(--mut)}nav{display:flex;gap:1.25rem;margin-bottom:2rem}
-.app{display:flex;align-items:center;gap:1rem}.app img{width:72px;height:72px;border-radius:16px}
-li{margin:.3rem 0}
-.stores{display:flex;flex-wrap:wrap;gap:.75rem;margin:1.5rem 0}
-.stores a{display:inline-block;padding:.65rem 1.1rem;border-radius:12px;background:var(--acc);color:var(--on);text-decoration:none;font-weight:600}
-.stores small{display:block;font-weight:400;font-size:.75rem;opacity:.85}
-</style></head><body><main>
-<nav><a href="/">PocketOps</a><a href="/privacy">Privacy</a><a href="/support">Support</a></nav>
-
-<div class="app"><img src="/icon.png" alt="PocketOps icon"><div><h1>PocketOps</h1><div class="mut">Alerts, logs and traces from your SigNoz, on your phone.</div></div></div>
-<p class="stores">
-<a href="https://apps.apple.com/app/id6826118344"><small>Download on the</small>App Store</a>
-<a href="https://play.google.com/store/apps/details?id=com.andrewovens.pocketops"><small>Get it on</small>Google Play</a>
-</p>
-<p>PocketOps is a read-only mobile client for <a href="https://signoz.io">SigNoz</a>. Check what is firing, search logs, and follow a slow or failing request through your services without opening a laptop.</p>
-<ul>
-<li><b>Alerts</b>: every rule by state, with firing instances and a jump to the logs or traces behind them.</li>
-<li><b>Logs</b>: search, severity and service filters, live tail, structured JSON read properly.</li>
-<li><b>Traces</b>: errors and slowest views, group by any field, waterfall with a jump to the failure.</li>
-<li><b>Services and metrics</b>: calls, errors and p99, with charts you can scrub.</li>
-</ul>
-<p>Connect with your SigNoz URL and a Viewer-role service-account API key. There is no account with us, no analytics and no advertising. See the <a href="/privacy">privacy policy</a>.</p>
-<p class="mut">PocketOps is an independent app and is not affiliated with or endorsed by SigNoz. The source is on <a href="https://github.com/avens19/pocketops">GitHub</a> under the MIT licence.</p>
-</main></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PocketOps — Your SigNoz, in your pocket</title>
+<meta name="description" content="A native SigNoz companion for iOS and Android. Investigate alerts, search logs, follow traces, and explore dashboards and saved views from your phone.">
+<meta name="theme-color" content="#f6f4ef">
+<link rel="canonical" href="https://pocketops.andrewovens.com/">
+<meta property="og:type" content="website"><meta property="og:title" content="PocketOps — Your SigNoz, in your pocket"><meta property="og:description" content="Alerts, logs, traces, metrics, and dashboards. A native mobile companion for your SigNoz."><meta property="og:url" content="https://pocketops.andrewovens.com/"><meta property="og:image" content="https://pocketops.andrewovens.com/icon.png">
+<link rel="icon" href="/icon.png"><link rel="apple-touch-icon" href="/icon.png"><link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="wrap"><nav class="site-nav" aria-label="Main navigation"><a class="brand" href="/" aria-label="PocketOps home"><img src="/icon.png" alt="" width="35" height="35">PocketOps</a><div class="nav-links"><a class="desktop-link" href="#explore">Explore</a><a class="desktop-link" href="/support">Support</a><a class="nav-download" href="#download">Get the app <span aria-hidden="true">↗</span></a></div></nav></header>
+<main id="main">
+<section class="hero wrap" aria-labelledby="hero-title">
+<div class="hero-copy"><div class="eyebrow"><span class="dot" aria-hidden="true"></span>A mobile companion for SigNoz</div><h1 id="hero-title">Your stack.<br>In your <em>pocket.</em></h1><p>A quick look. A deeper investigation. Take your alerts, logs, traces, and dashboards with you—wherever the day takes you.</p>
+<div class="downloads">
+<a class="store-link" href="https://apps.apple.com/app/id6826118344" aria-label="Download PocketOps on the App Store"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.1 12.6c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.2-2.8.9-3.5.9-.8 0-1.9-.9-3.1-.9-1.6 0-3.1.9-4 2.3-1.7 2.9-.4 7.3 1.2 9.7.8 1.1 1.7 2.3 2.9 2.2 1.2 0 1.6-.7 3.1-.7s1.9.7 3.2.7c1.3 0 2.1-1.1 2.9-2.2.9-1.3 1.3-2.6 1.3-2.7-.1 0-2.6-1-2.6-4zM14.8 5.8c.6-.8 1.1-1.9 1-3-.9.1-2.1.6-2.7 1.4-.6.7-1.2 1.8-1 2.9 1 .1 2.1-.5 2.7-1.3z"/></svg><span><small>Download on the</small><strong>App Store</strong></span></a>
+<a class="store-link" href="https://play.google.com/store/apps/details?id=com.andrewovens.pocketops" aria-label="Get PocketOps on Google Play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2.5v19L15 12 4 2.5zm1.9-.3 11 6.3-2.2 2L5.9 2.2zm11 13.3-11 6.3 8.8-8.3 2.2 2zm1.3-6.2 3 1.7c.8.5.8 1.5 0 2l-3 1.7-2.8-2.7 2.8-2.7z"/></svg><span><small>Get it on</small><strong>Google Play</strong></span></a>
+</div><p class="footnote">iOS &amp; Android · Open source · Connects to your SigNoz</p></div>
+<div class="hero-art"><div class="orbit" aria-hidden="true"></div><div class="floating-note" aria-hidden="true">LESS DESK. SAME CONTEXT.<span>Keep a pulse on production.</span></div><div class="phone"><img src="/images/service.png" alt="PocketOps service detail showing request rate, top operations, and recent errors for a demo checkout service" width="1320" height="2868" fetchpriority="high"></div><p class="art-label">Actual app · Demo data</p></div>
+</section>
+<div class="wrap"><div class="signal-strip"><p>Your observability.<br>A little more portable.</p><ul aria-label="Supported signals"><li>Alerts</li><li>Logs</li><li>Traces</li><li>Metrics</li><li>Dashboards</li></ul></div></div>
+<section class="section wrap" id="explore" aria-labelledby="explore-title">
+<div class="section-intro"><div><div class="eyebrow">Built for the moment you need it</div><h2 id="explore-title">From “what’s happening?”<br>to the details that matter.</h2></div><p>Pick up the investigation on your phone, with native screens made for a smaller display.</p></div>
+<div class="screens">
+<article class="screen-card"><div class="screen-stage"><div class="phone"><img src="/images/alerts.png" alt="PocketOps alert rules sorted by state, including a firing checkout error alert" width="1320" height="2868" loading="lazy" decoding="async"></div></div><div class="screen-copy"><span class="number">01 / GET YOUR BEARINGS</span><h3>Know what needs<br>your attention.</h3><p>See alert states and firing instances, then jump into the logs or traces behind them.</p></div></article>
+<article class="screen-card"><div class="screen-stage"><div class="phone"><img src="/images/logs.png" alt="PocketOps log explorer with search, severity filters, and structured log messages" width="1320" height="2868" loading="lazy" decoding="async"></div></div><div class="screen-copy"><span class="number">02 / FIND THE CONTEXT</span><h3>Less scrolling.<br>More signal.</h3><p>Search logs, filter by attributes, follow live output, and read structured JSON without the clutter.</p></div></article>
+<article class="screen-card"><div class="screen-stage"><div class="phone"><img src="/images/traces.png" alt="PocketOps trace explorer with error, slowest, and group-by controls" width="1320" height="2868" loading="lazy" decoding="async"></div></div><div class="screen-copy"><span class="number">03 / FOLLOW THE REQUEST</span><h3>Go where<br>the latency is.</h3><p>Narrow down slow or failing spans. Open a trace waterfall and follow the request across services.</p></div></article>
+</div><p class="demo-note">Screenshots use illustrative demo data. Available features depend on your SigNoz version and API key permissions.</p>
+</section>
+<section class="deep-section section" aria-labelledby="deep-title"><div class="wrap deep-grid"><div><div class="eyebrow">Your familiar views. A smaller screen.</div><h2 id="deep-title">The big picture.<br>And the little details.</h2><p>Bring the dashboards and saved queries you already use. Keep your environment, time range, and investigation in view as you move from an overview to individual records.</p><a class="text-link" href="#connect">Make yourself at home <span aria-hidden="true">↗</span></a></div><div class="workflow"><article><span>01</span><div><h3>Open your dashboards</h3><p>Browse collapsible sections, change variables, and explore charts and tables. Panels load as you reach them.</p></div></article><article><span>02</span><div><h3>Pick up a saved query</h3><p>Load log, trace, and metric views. Adjust filters, aggregations, and grouping. Save your changes when your key permits.</p></div></article><article><span>03</span><div><h3>Go deeper, without starting over</h3><p>Drill into matching logs or spans from supported panels, carrying the filters and displayed time window with you.</p></div></article></div></div></section>
+<section class="section wrap" id="connect" aria-labelledby="connect-title"><div class="setup"><div><div class="eyebrow">A direct connection</div><h2 id="connect-title">Your server.<br>Your data.<br>Your way in.</h2><p class="setup-lead">No new PocketOps account. Connect directly to the SigNoz instance you already run.</p><a class="text-link" href="/support">Read the connection guide <span aria-hidden="true">↗</span></a></div><ol class="steps"><li><div><h3>Bring your SigNoz URL</h3><p>Use your hosted or self-managed instance. For private networks, connect your phone to the same network or VPN.</p></div></li><li><div><h3>Add a service-account key</h3><p>A Viewer-role key is enough to browse. Creating and updating shared saved views requires the corresponding permissions.</p></div></li><li><div><h3>Start with what matters</h3><p>Check an alert, open a dashboard, or pick a saved view. Your existing telemetry is ready to explore.</p></div></li></ol></div><div class="principles"><article><h3>No ads. No analytics.</h3><p>Your telemetry goes directly between your phone and your SigNoz server.</p></article><article><h3>Keys stay on your device.</h3><p>Your connection details use the operating system’s secure storage.</p></article><article><h3>Open source, all the way.</h3><p>Inspect the code, report a bug, or contribute on <a href="https://github.com/avens19/pocketops">GitHub</a>. Licensed under MIT.</p></article></div></section>
+<section class="section wrap faq" aria-labelledby="faq-title"><div class="eyebrow">A few things to know</div><h2 id="faq-title">Before you head out.</h2><details><summary>Do I need an existing SigNoz instance?</summary><p>Yes. PocketOps is a mobile client for SigNoz. It connects to your existing server with a service-account API key; it does not host or collect telemetry for you.</p></details><details><summary>Can PocketOps change anything on my server?</summary><p>It can create and update shared saved views when your API key has permission. With a Viewer-role key, you can browse your telemetry without those save controls.</p></details><details><summary>Does every dashboard panel work?</summary><p>The viewer supports builder and formula queries in time-series charts, stacked bars, tables, numbers, and text panels. Some advanced query types and web-specific presentation settings are not supported. Dashboard editing stays in SigNoz.</p></details><details><summary>Is this an official SigNoz app?</summary><p>No. PocketOps is an independent, open-source app by Andrew Ovens. It is not affiliated with or endorsed by SigNoz.</p></details></section>
+<div class="wrap"><section class="closing" id="download" aria-labelledby="download-title"><div class="eyebrow">Ready when you need a closer look</div><h2 id="download-title">Take your stack with you.</h2><p>Get PocketOps for iOS or Android. Bring your SigNoz.</p><div class="downloads"><a class="store-link" href="https://apps.apple.com/app/id6826118344"><span><small>Download on the</small><strong>App Store <span aria-hidden="true">↗</span></strong></span></a><a class="store-link" href="https://play.google.com/store/apps/details?id=com.andrewovens.pocketops"><span><small>Get it on</small><strong>Google Play <span aria-hidden="true">↗</span></strong></span></a></div></section></div>
+</main>
+<footer class="wrap"><div class="footer"><div><a class="brand" href="/"><img src="/icon.png" alt="" width="35" height="35">PocketOps</a><p>An independent mobile companion for SigNoz.<br>Not affiliated with or endorsed by SigNoz.</p></div><nav class="footer-links" aria-label="Footer navigation"><a href="https://github.com/avens19/pocketops">GitHub ↗</a><a href="/support">Support</a><a href="/privacy">Privacy</a></nav></div></footer>
+</body></html>
