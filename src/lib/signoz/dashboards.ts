@@ -95,6 +95,7 @@ export function panelQueries(panel: DashboardPanel): { requestType: 'scalar' | '
   if (types.size !== 1 || (!types.has('scalar') && !types.has('time_series'))) throw new Error('This panel query type is not supported.');
   const queries = envelopes.flatMap(({ spec: { plugin } }) => {
     if (plugin.kind === 'signoz/BuilderQuery') return [{ type: 'builder_query', spec: plugin.spec }];
+    if (plugin.kind === 'signoz/PromQLQuery') return [{ type: 'promql', spec: plugin.spec }];
     if (plugin.kind === 'signoz/CompositeQuery' && Array.isArray(plugin.spec.queries)) return plugin.spec.queries as QueryEnvelope[];
     throw new Error('This query plugin is not supported. Open it in SigNoz.');
   });

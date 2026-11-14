@@ -111,7 +111,8 @@ describe('dashboard API and complete performance export', () => {
     const series = (name: string, labels: Record<string, string>) => ({ queryName: name, aggregations: [{ index: 0, series: [{ labels: Object.entries(labels).map(([k, value]) => ({ key: { name: k }, value })), values: [{ timestamp: 1000, value: 2 }] }] }] });
     const parsed = dashboardResults(p, { data: { results: [series('A', { todoListName: 'Paystubs' }), series('B', {})] } });
     expect(parsed.series.map((s) => s.series.name)).toEqual(['Paystubs', 'asked']);
-    expect(drillExpression(parsed.series[0].query, variables, parsed.series[0].groups)).toBeNull();
+    expect(drillExpression(parsed.series[0].query, variables, parsed.series[0].groups)).toBeNull();    const single: typeof p = { ...p, spec: { ...p.spec, queries: [{ kind: 'time_series', spec: { name: 'A', plugin: { kind: 'signoz/PromQLQuery', spec: { name: 'A', query: 'max(y)', legend: '{{service.name}}', step: 0 } } } }] } };
+    expect(dashboardPanelRequest(single, variables, range).compositeQuery.queries).toEqual([{ type: 'promql', spec: { name: 'A', query: 'max(y)', legend: '{{service.name}}', step: 60 } }]);
   });
 });
 
