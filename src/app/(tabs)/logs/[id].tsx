@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import { Link, Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { AttributeList } from '@/components/attribute-list';
@@ -16,6 +16,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useClient } from '@/lib/auth';
 import { explorer } from '@/lib/explorer-state';
 import { formatTime } from '@/lib/format';
+import { logNeighbors } from '@/lib/log-neighbors';
 import { fetchLogById } from '@/lib/signoz/api';
 
 export default function LogDetailScreen() {
@@ -29,6 +30,21 @@ export default function LogDetailScreen() {
     queryKey: ['log', client.endpoint, id],
     queryFn: ({ signal }) => fetchLogById(client, id, signal),
   });
+
+  // Swipe sideways to step through the list the user came from: left for the next (older) log, right for the previous.
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dx) > Math.abs(g.dy) * 2,
+        onPanResponderRelease: (_, g) => {
+          if (Math.abs(g.dx) < 60 && Math.abs(g.vx) < 0.5) return;
+          const { previous, next } = logNeighbors(id);
+          const target = g.dx < 0 ? next : previous;
+          if (target) router.setParams({ id: target });
+        },
+      }),
+    [id, router],
+  );
 
   if (log.isPending) return <Loading />;
   if (log.isError) return <ErrorState error={log.error} onRetry={() => log.refetch()} />;
@@ -61,7 +77,8 @@ export default function LogDetailScreen() {
   const bodyFields = row.bodyFields && Object.keys(row.bodyFields).length > 0 ? row.bodyFields : undefined;
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
+    <View style={styles.flex} {...pan.panHandlers}>
+    <ScrollView key={id} contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: 'Log' }} />
 
       <View style={styles.meta}>
@@ -145,6 +162,7 @@ export default function LogDetailScreen() {
         Tap an attribute to filter by it.
       </ThemedText>
     </ScrollView>
+    </View>
   );
 }
 
@@ -160,6 +178,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   content: { padding: Spacing.three, gap: Spacing.three },
   meta: { flexDirection: 'row', gap: Spacing.two, alignItems: 'center' },
   bold: { fontWeight: '600' },

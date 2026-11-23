@@ -22,6 +22,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useClient } from '@/lib/auth';
 import { explorer, useExplorer } from '@/lib/explorer-state';
 import { clausesToExpression } from '@/lib/filters';
+import { setLogNeighbors } from '@/lib/log-neighbors';
 import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
 import { LIVE_LOG_LIMIT, LOG_PAGE_SIZE, fetchLogs } from '@/lib/signoz/api';
 import {
@@ -98,7 +99,10 @@ function LogsView({ params }: { params: LogsParams }) {
 
   const source = live ? tail : paged;
   const rows = useMemo(() => (live ? (tail.data ?? []) : (paged.data?.pages.flat() ?? [])), [live, tail.data, paged.data]);
-  const toggleLevel = (l: LogLevel) => setLevels((cur) => (cur.includes(l) ? cur.filter((x) => x !== l) : [...cur, l]));
+  useEffect(() => {
+    setLogNeighbors(rows.map((r) => r.id));
+  }, [rows]);
+  const toggleLevel =(l: LogLevel) => setLevels((cur) => (cur.includes(l) ? cur.filter((x) => x !== l) : [...cur, l]));
 
   const header = (
     <View style={styles.header}>
