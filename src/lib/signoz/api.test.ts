@@ -35,6 +35,20 @@ describe('listRules', () => {
     expect(await listRules(v1.client)).toMatchObject([{ id: '7', name: 'Old' }]);
   });
 
+  it('falls back when a missing version answers with the SigNoz UI page', async () => {
+    const seen: string[] = [];
+    const impl = (async (url: string) => {
+      const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!;
+      seen.push(path);
+      if (path === '/api/v1/rules') {
+        return new Response(JSON.stringify({ status: 'success', data: { rules: [{ id: 1, alert: 'Old', state: 'firing' }] } }));
+      }
+      return new Response('<!doctype html><html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }) as unknown as typeof fetch;
+    expect(await listRules(new SignozClient(creds, impl))).toMatchObject([{ id: '1', name: 'Old' }]);
+    expect(seen).toEqual(['/api/v3/rules', '/api/v2/rules', '/api/v1/rules']);
+  });
+
   it('does not swallow auth errors', async () => {
     const impl = (async () => new Response('{}', { status: 401 })) as unknown as typeof fetch;
     await expect(listRules(new SignozClient(creds, impl))).rejects.toMatchObject({ kind: 'auth' });

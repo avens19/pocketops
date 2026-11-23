@@ -2,16 +2,29 @@ import { describe, expect, it } from 'vitest';
 
 import { SignozClient, SignozError, isPrivateHost, normalizeEndpoint } from './client';
 
-function fakeFetch(responses: Record<string, { status?: number; body?: unknown; text?: string }>) {
+interface FakeResponse {
+  status?: number;
+  body?: unknown;
+  text?: string;
+  headers?: Record<string, string>;
+  redirected?: boolean;
+}
+
+function fakeFetch(responses: Record<string, FakeResponse>) {
   const calls: { url: string; init: RequestInit }[] = [];
   const impl = (async (url: string, init: RequestInit) => {
     calls.push({ url, init });
     const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]!;
     const r = responses[path] ?? { status: 404, body: { status: 'error', error: { message: 'not found' } } };
-    return new Response(r.text ?? JSON.stringify(r.body ?? {}), { status: r.status ?? 200 });
+    const response = new Response(r.text ?? JSON.stringify(r.body ?? {}), { status: r.status ?? 200, headers: r.headers });
+    if (r.redirected) Object.defineProperty(response, 'redirected', { value: true });
+    return response;
   }) as unknown as typeof fetch;
   return { impl, calls };
 }
+
+/** What SigNoz returns for a route it does not have: its web UI, with a 200. */
+const UI_PAGE: FakeResponse = { text: '<!doctype html><html></html>', headers: { 'Content-Type': 'text/html; charset=utf-8' } };
 
 const creds = { endpoint: 'https://signoz.example.com', apiKey: 'k' };
 
@@ -70,6 +83,19 @@ describe('SignozClient', () => {
     await expect(new SignozClient(creds, impl).request('/x')).rejects.toMatchObject({ kind: 'unknown' });
   });
 
+  it('treats the SigNoz UI page as a missing endpoint', async () => {
+    const { impl } = fakeFetch({ '/x': UI_PAGE });
+    await expect(new SignozClient(creds, impl).request('/x')).rejects.toMatchObject({
+      kind: 'not-found',
+      message: expect.stringContaining('did not answer like SigNoz'),
+    });
+  });
+
+  it('treats a redirect to an HTML login page as the wrong server', async () => {
+    const { impl } = fakeFetch({ '/x': { ...UI_PAGE, redirected: true } });
+    await expect(new SignozClient(creds, impl).request('/x')).rejects.toMatchObject({ kind: 'unknown' });
+  });
+
   it('reports network failures distinctly', async () => {
     const impl = (async () => {
       throw new TypeError('Network request failed');
@@ -79,6 +105,18 @@ describe('SignozClient', () => {
 
   it('verify falls back to the rules endpoint on older servers', async () => {
     const { impl, calls } = fakeFetch({ '/api/v1/rules': { body: { status: 'success', data: { rules: [] } } } });
+    await new SignozClient(creds, impl).verify();
+    expect(calls.map((c) => c.url)).toEqual([
+      'https://signoz.example.com/api/v1/service_accounts/me',
+      'https://signoz.example.com/api/v1/rules',
+    ]);
+  });
+
+  it('verify falls back when an older server answers service_accounts/me with its UI page', async () => {
+    const { impl, calls } = fakeFetch({
+      '/api/v1/service_accounts/me': UI_PAGE,
+      '/api/v1/rules': { body: { status: 'success', data: { rules: [] } } },
+    });
     await new SignozClient(creds, impl).verify();
     expect(calls.map((c) => c.url)).toEqual([
       'https://signoz.example.com/api/v1/service_accounts/me',
