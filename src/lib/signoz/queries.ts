@@ -329,7 +329,7 @@ export function metricSeriesQuery(
   range: TimeRange,
   metricName: string,
   kind: MetricKind,
-  options: { monotonic?: boolean; groupBy?: MetricGroup; aggregation?: string } = {},
+  options: { monotonic?: boolean; groupBy?: MetricGroup; aggregation?: string; filter?: string } = {},
 ) {
   const choices = metricAggregations(kind, options.monotonic);
   const chosen = choices.find((c) => c.key === options.aggregation) ?? choices[0];
@@ -343,6 +343,7 @@ export function metricSeriesQuery(
         signal: 'metrics',
         stepInterval: stepSeconds(range),
         aggregations: [aggregation],
+        ...(options.filter?.trim() ? { filter: { expression: options.filter.trim() } } : {}),
         ...(options.groupBy ? { groupBy: [{ name: options.groupBy.name, fieldContext: options.groupBy.context || 'resource' }] } : {}),
         limit: 10,
       },

@@ -9,7 +9,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useTheme } from '@/hooks/use-theme';
 import { useClient } from '@/lib/auth';
-import { explorer, type ExplorerSignal } from '@/lib/explorer-state';
+import { type ExplorerSignal } from '@/lib/explorer-state';
 import { OP_LABEL, UNARY_OPS, inferValue, isValidKey, type Clause, type FilterOp } from '@/lib/filters';
 import { fetchFieldKeys, fetchFieldValues } from '@/lib/signoz/api';
 import type { TimeRange } from '@/lib/signoz/queries';
@@ -18,7 +18,9 @@ const PICKER_OPS: FilterOp[] = ['=', '!=', 'IN', 'NOT IN', 'CONTAINS', 'NOT CONT
 
 interface FilterEditorProps {
   visible: boolean;
-  signal: ExplorerSignal;
+  signal: ExplorerSignal | 'metrics';
+  /** For signal=metrics: the one metric whose labels are offered. */
+  metric?: string;
   range: TimeRange;
   /** The clause being edited; omitted when adding. */
   initial?: Clause;
@@ -69,7 +71,7 @@ export function Field({ label, ...props }: { label: string } & React.ComponentPr
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
-        placeholderTextColor={theme.textSecondary}
+        placeholderTextColor={theme.textSecondary + '99'}
         {...props}
         style={[styles.input, { backgroundColor: theme.card, borderColor: theme.border, color: theme.text }, props.multiline ? styles.multiline : null, props.style]}
       />
@@ -88,7 +90,7 @@ function initialValueText(initial: Clause | undefined): string {
   return initial.value === undefined ? '' : String(initial.value);
 }
 
-function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorProps) {
+function FilterForm({ signal, metric, range, initial, onClose, onSubmit }: FilterEditorProps) {
   const client = useClient();
   const theme = useTheme();
   const [key, setKey] = useState(initial?.kind === 'filter' ? initial.key : '');
@@ -103,23 +105,23 @@ function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorP
 
   const debouncedKey = useDebounced(key);
   const keys = useQuery({
-    queryKey: ['field-keys', client.endpoint, signal, debouncedKey, windowKey],
-    queryFn: ({ signal: abort }) => fetchFieldKeys(client, signal, debouncedKey, range, abort),
+    queryKey: ['field-keys', client.endpoint, signal, metric, debouncedKey, windowKey],
+    queryFn: ({ signal: abort }) => fetchFieldKeys(client, signal, debouncedKey, range, abort, metric),
     enabled: !isRaw,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
   const debouncedValue = useDebounced(valueText);
   const values = useQuery({
-    queryKey: ['field-values', client.endpoint, signal, key, debouncedValue, windowKey],
-    queryFn: ({ signal: abort }) => fetchFieldValues(client, signal, key, debouncedValue, range, abort),
+    queryKey: ['field-values', client.endpoint, signal, metric, key, debouncedValue, windowKey],
+    queryFn: ({ signal: abort }) => fetchFieldValues(client, signal, key, debouncedValue, range, abort, metric),
     enabled: !isRaw && !!key && !unary,
     placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
 
   const exactKey = keys.data?.some((k) => k.name === key);
-  const keySuggestions = keyFocused && !exactKey ? (keys.data ?? []).slice(0, 12) : [];
+  const keySuggestions = keyFocused && !exactKey ? (keys.data ?? []) : [];
   const keyOk = isValidKey(key.trim());
   const canApply = isRaw ? rawText.trim().length > 0 : keyOk && (unary || valueText.trim().length > 0);
   const list = op === 'IN' || op === 'NOT IN';
@@ -147,14 +149,14 @@ function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorP
 
   return (
     <Sheet visible title={initial ? 'Edit filter' : 'Add filter'} onClose={onClose} onApply={apply} canApply={canApply}>
-      <Field label="Field" value={key} onChangeText={setKey} onFocus={() => setKeyFocused(true)} onBlur={() => setKeyFocused(false)} placeholder="service.name" autoFocus={initial === undefined} />
+      <Field label="Field" value={key} onChangeText={setKey} onFocus={() => setKeyFocused(true)} onBlur={() => setKeyFocused(false)} placeholder="e.g. service.name" autoFocus={initial === undefined} />
       {key.trim() && !keyOk ? (
         <ThemedText type="caption" color="danger">
           A field name has letters, digits and . _ - : only. Use “Edit query” for anything else.
         </ThemedText>
       ) : null}
       {keySuggestions.length > 0 ? (
-        <View style={[styles.suggestions, { backgroundColor: theme.card, borderColor: theme.border }]}>
+        <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" persistentScrollbar style={[styles.suggestions, styles.suggestionsScroll, { backgroundColor: theme.card, borderColor: theme.border }]}>
           {keySuggestions.map((k, i) => (
             <Pressable
               key={k.name}
@@ -170,7 +172,7 @@ function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorP
               <ThemedText type="caption">{[k.context, k.dataType].filter(Boolean).join(' · ')}</ThemedText>
             </Pressable>
           ))}
-        </View>
+        </ScrollView>
       ) : null}
 
       <View style={styles.field}>
@@ -186,7 +188,7 @@ function FilterForm({ signal, range, initial, onClose, onSubmit }: FilterEditorP
 
       {unary ? null : (
         <>
-          <Field label="Value" value={valueText} onChangeText={setValueText} placeholder={list ? 'checkout, payments' : 'value'} />
+          <Field label="Value" value={valueText} onChangeText={setValueText} placeholder={list ? 'e.g. checkout, payments' : 'e.g. checkout'} />
           {list ? <ThemedText type="caption">Separate several values with commas.</ThemedText> : null}
           {key && (values.data ?? []).length > 0 ? (
             <View style={styles.values}>
@@ -246,12 +248,12 @@ function GroupByForm({ signal, range, onClose, onSubmit }: { signal: ExplorerSig
 }
 
 /** The whole filter as text, for expressions the chips cannot build (OR, parentheses, functions). */
-export function QueryEditor(props: { visible: boolean; signal: ExplorerSignal; onClose: () => void; onSubmit: (expression: string) => void }) {
+export function QueryEditor(props: { visible: boolean; initial: string; onClose: () => void; onSubmit: (expression: string) => void }) {
   return props.visible ? <QueryForm {...props} /> : null;
 }
 
-function QueryForm({ signal, onClose, onSubmit }: { signal: ExplorerSignal; onClose: () => void; onSubmit: (expression: string) => void }) {
-  const [text, setText] = useState(() => explorer.expression(signal));
+function QueryForm({ initial, onClose, onSubmit }: { initial: string; onClose: () => void; onSubmit: (expression: string) => void }) {
+  const [text, setText] = useState(initial);
   return (
     <Sheet visible title="Edit query" onClose={onClose} onApply={() => onSubmit(text.trim())} canApply>
       <Field label="Filter expression" value={text} onChangeText={setText} multiline autoFocus placeholder="service.name = 'api' AND http.status_code >= 500" />
@@ -271,6 +273,7 @@ const styles = StyleSheet.create({
   field: { gap: 6 },
   input: { fontSize: 16, paddingHorizontal: Spacing.three - 2, paddingVertical: 12, borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth },
   multiline: { minHeight: 120, textAlignVertical: 'top', fontFamily: 'monospace', fontSize: 14 },
+  suggestionsScroll: { maxHeight: 280 },
   suggestions: { borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, overflow: 'hidden' },
   suggestion: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingVertical: 12 },
   ops: { gap: Spacing.two },

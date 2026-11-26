@@ -222,3 +222,17 @@ describe('parseGroupedRows', () => {
     expect(parseGroupedRows(undefined)).toEqual([]);
   });
 });
+
+describe('metricSeriesQuery filter', () => {
+  const spec = (filter?: string) =>
+    (metricSeriesQuery({ startMs: 0, endMs: 1 }, 'm', 'gauge', { filter }).compositeQuery.queries[0] as { spec: { filter?: { expression: string } } }).spec;
+
+  it('sends a filter expression when one is set', () => {
+    expect(spec("service.name = 'api'").filter).toEqual({ expression: "service.name = 'api'" });
+  });
+
+  it('omits the filter when empty', () => {
+    expect(spec('').filter).toBeUndefined();
+    expect(spec().filter).toBeUndefined();
+  });
+});

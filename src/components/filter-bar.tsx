@@ -6,19 +6,33 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { explorer, useExplorer, type ExplorerSignal } from '@/lib/explorer-state';
-import { describeClause, type Clause } from '@/lib/filters';
+import { addClause, clausesToExpression, describeClause, parseExpression, removeClause, replaceClause, type Clause } from '@/lib/filters';
 import type { TimeRange } from '@/lib/signoz/queries';
 
 interface FilterBarProps {
-  signal: ExplorerSignal;
+  signal: ExplorerSignal | 'metrics';
+  /**
+   * Keeps the filter in the caller instead of the shared explorer state, for a screen whose filter belongs to what it shows
+   * (one metric) rather than to a tab. `metric` narrows field suggestions to that metric's labels.
+   */
+  local?: { clauses: Clause[]; onChange: (clauses: Clause[]) => void; metric?: string };
   /** The window the screen is looking at; autocomplete only offers fields and values seen in it. */
   range: TimeRange;
 }
 
 /** The active filters as removable chips, plus the entry points for adding one or editing the whole query. */
-export function FilterBar({ signal, range }: FilterBarProps) {
+export function FilterBar({ signal, range, local }: FilterBarProps) {
   const theme = useTheme();
-  const { clauses } = useExplorer(signal);
+  const shared = useExplorer(signal === 'metrics' ? 'logs' : signal);
+  const clauses = local ? local.clauses : shared.clauses;
+  const store = {
+    add: (clause: Clause) => (local ? local.onChange(addClause(local.clauses, clause)) : explorer.add(signal as ExplorerSignal, clause)),
+    replace: (index: number, clause: Clause) => (local ? local.onChange(replaceClause(local.clauses, index, clause)) : explorer.replace(signal as ExplorerSignal, index, clause)),
+    remove: (index: number) => (local ? local.onChange(removeClause(local.clauses, index)) : explorer.remove(signal as ExplorerSignal, index)),
+    clear: () => (local ? local.onChange([]) : explorer.clear(signal as ExplorerSignal)),
+    expression: () => clausesToExpression(clauses),
+    setExpression: (expression: string) => (local ? local.onChange(parseExpression(expression)) : explorer.setExpression(signal as ExplorerSignal, expression, explorer.get(signal as ExplorerSignal).text)),
+  };
   const [editing, setEditing] = useState<{ index: number | null } | null>(null);
   const [queryOpen, setQueryOpen] = useState(false);
 
@@ -60,7 +74,7 @@ export function FilterBar({ signal, range }: FilterBarProps) {
             key={`${i}-${describeClause(clause).key}-${describeClause(clause).value}`}
             clause={clause}
             onPress={() => setEditing({ index: i })}
-            onRemove={() => explorer.remove(signal, i)}
+            onRemove={() => store.remove(i)}
           />
         ))}
         {clauses.length > 0 ? (
@@ -71,7 +85,7 @@ export function FilterBar({ signal, range }: FilterBarProps) {
           </Pressable>
         ) : null}
         {clauses.length > 1 ? (
-          <Pressable accessibilityRole="button" onPress={() => explorer.clear(signal)} style={styles.link}>
+          <Pressable accessibilityRole="button" onPress={store.clear} style={styles.link}>
             <ThemedText type="small" color="textSecondary" style={styles.bold}>
               Clear all
             </ThemedText>
@@ -82,21 +96,22 @@ export function FilterBar({ signal, range }: FilterBarProps) {
       <FilterEditor
         visible={editing !== null}
         signal={signal}
+        metric={local?.metric}
         range={range}
         initial={editing?.index != null ? clauses[editing.index] : undefined}
         onClose={() => setEditing(null)}
         onSubmit={(clause) => {
-          if (editing?.index != null) explorer.replace(signal, editing.index, clause);
-          else explorer.add(signal, clause);
+          if (editing?.index != null) store.replace(editing.index, clause);
+          else store.add(clause);
           setEditing(null);
         }}
       />
       <QueryEditor
         visible={queryOpen}
-        signal={signal}
+        initial={store.expression()}
         onClose={() => setQueryOpen(false)}
         onSubmit={(expression) => {
-          explorer.setExpression(signal, expression, explorer.get(signal).text);
+          store.setExpression(expression);
           setQueryOpen(false);
         }}
       />

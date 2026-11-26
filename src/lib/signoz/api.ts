@@ -432,7 +432,7 @@ export async function fetchMetricSeries(
   client: SignozClient,
   range: TimeRange,
   metric: { name: string; type: MetricKind; isMonotonic?: boolean },
-  options: { groupBy?: MetricGroup; aggregation?: string },
+  options: { groupBy?: MetricGroup; aggregation?: string; filter?: string },
   signal?: AbortSignal,
 ) {
   const run = async (name: string) =>
@@ -510,9 +510,11 @@ export async function fetchFieldValues(
   search: string,
   range: TimeRange,
   abort?: AbortSignal,
+  /** For signal=metrics: narrows the values to this one metric's series. */
+  metricName?: string,
 ): Promise<string[]> {
   const data = await client.request<{ values?: Record<string, unknown[] | null> | null }>('/api/v1/fields/values', {
-    query: { signal, name, searchText: search || undefined, limit: 30, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
+    query: { signal, metricName, name, searchText: search || undefined, limit: 30, startUnixMilli: Math.floor(range.startMs), endUnixMilli: Math.floor(range.endMs) },
     signal: abort,
   });
   const values = data?.values ?? {};

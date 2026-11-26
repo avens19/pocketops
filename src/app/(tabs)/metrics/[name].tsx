@@ -8,7 +8,11 @@ import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { Chip } from '@/components/chip';
-import { LineChart } from '@/components/line-chart';
+import { FilterBar } from '@/components/filter-bar';
+import { LineChart, readoutTime } from '@/components/line-chart';
+import { clausesToExpression, type Clause } from '@/lib/filters';
+import { useTheme } from '@/hooks/use-theme';
+import type { Series } from '@/lib/signoz/types';
 import { Empty, ErrorState, Loading } from '@/components/query-state';
 import { RangeChip } from '@/components/range-chip';
 import { useWindowAnchor } from '@/hooks/use-window-anchor';
@@ -27,6 +31,10 @@ export default function MetricDetailScreen() {
   const insets = useSafeAreaInsets();
   const [groupBy, setGroupBy] = useState<MetricGroup | undefined>();
   const [aggregation, setAggregation] = useState<string | undefined>();
+  const [clauses, setClauses] = useState<Clause[]>([]);
+  const filter = clausesToExpression(clauses);
+  // A picked time stays after the finger lifts, so the values below can be read; a refetch that drops the bucket returns to latest.
+  const [picked, setPicked] = useState<number | null>(null);
 
   // Arriving by link carries only the name; look the type up so we know how to aggregate it.
   const info = useQuery({
@@ -52,13 +60,13 @@ export default function MetricDetailScreen() {
   const choices = type ? metricAggregations(type, monotonic) : [];
   const activeAggregation = choices.find((c) => c.key === aggregation) ?? choices[0];
 
-  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, groupBy, activeAggregation?.key]));
+  const [anchor, refresh] = useWindowAnchor(JSON.stringify([range, groupBy, activeAggregation?.key, filter]));
   const resolved = resolveRange(range, anchor);
   const series = useQuery({
-    queryKey: ['metric-series', client.endpoint, params.name, type, resolved, groupBy, activeAggregation?.key],
+    queryKey: ['metric-series', client.endpoint, params.name, type, resolved, groupBy, activeAggregation?.key, filter],
     enabled: !!type,
     queryFn: ({ signal }) =>
-      fetchMetricSeries(client, resolved, { name: params.name, type: type!, isMonotonic: monotonic }, { groupBy, aggregation: activeAggregation?.key }, signal),
+      fetchMetricSeries(client, resolved, { name: params.name, type: type!, isMonotonic: monotonic }, { groupBy, aggregation: activeAggregation?.key, filter }, signal),
   });
 
   // A rate is per second; everything else is in the metric's own unit.
@@ -81,8 +89,10 @@ export default function MetricDetailScreen() {
         </ThemedText>
       </View>
 
-      <SavedViewsBar source="metrics" range={range} spec={type ? viewSpecFromQuery('metrics', metricSeriesQuery(resolved, params.name, type, { monotonic, groupBy, aggregation: activeAggregation?.key })) : undefined} />
+      <SavedViewsBar source="metrics" range={range} spec={type ? viewSpecFromQuery('metrics', metricSeriesQuery(resolved, params.name, type, { monotonic, groupBy, aggregation: activeAggregation?.key, filter })) : undefined} />
       <RangeChip value={range} onChange={(key) => setRange({ key })} />
+
+      <FilterBar signal="metrics" range={resolved} local={{ clauses, onChange: setClauses, metric: params.name }} />
 
       {choices.length > 1 ? (
         <View style={styles.row}>
@@ -119,14 +129,44 @@ export default function MetricDetailScreen() {
         ) : series.isError ? (
           <ErrorState error={series.error} onRetry={() => series.refetch()} />
         ) : (
-          <LineChart series={series.data ?? []} height={180} legend format={format} />
+          <MetricChart series={series.data ?? []} format={format} picked={picked} onPick={setPicked} />
         )}
       </Card>
     </ScrollView>
   );
 }
 
+function MetricChart({ series, format, picked, onPick }: { series: Series[]; format: (v: number) => string; picked: number | null; onPick: (t: number | null) => void }) {
+  const theme = useTheme();
+  const palette = [theme.accent, theme.info, theme.success, theme.warning, theme.danger];
+  const at = picked !== null && series.some((s) => s.points.some((p) => p.t === picked)) ? picked : null;
+  const valueAt = (points: Series['points']) => (at === null ? points.at(-1) : points.find((p) => p.t === at));
+  return (
+    <View style={{ gap: 10 }}>
+      <LineChart series={series} height={180} format={format} cursor={at} onCursorChange={onPick} />
+      {series.some((s) => s.points.length) ? (
+        <View style={styles.pickRow}>
+          <ThemedText type="caption" style={{ flex: 1 }}>{at === null ? 'Latest values. Touch the chart to pick a time.' : `Values at ${readoutTime(at)}`}</ThemedText>
+          {at !== null ? <Chip label="Back to latest" onPress={() => onPick(null)} /> : null}
+        </View>
+      ) : null}
+      {series.map((s, i) => {
+        const p = valueAt(s.points);
+        return (
+          <View key={`${s.name}-${i}`} style={styles.valueRow}>
+            <View style={[styles.swatch, { backgroundColor: palette[i % palette.length] }]} />
+            <ThemedText type="small" style={{ flex: 1, color: palette[i % palette.length] }}>{series.length > 1 ? `${s.name}: ` : ''}{p ? format(p.v) : '—'}</ThemedText>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  pickRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, minHeight: 34 },
+  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  swatch: { width: 10, height: 10, borderRadius: 2 },
   content: { padding: Spacing.three, gap: Spacing.three },
   meta: { gap: 2 },
   row: { gap: 4 },
