@@ -19,6 +19,7 @@ import { Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
 import { useTheme } from '@/hooks/use-theme';
 import { useWindowAnchor } from '@/hooks/use-window-anchor';
+import { defaultTraceChart } from '@/lib/aggregate-view';
 import { useClient } from '@/lib/auth';
 import { applyRouteFilter, exploreSignature, hasExploreFilter, type ExploreParams } from '@/lib/explore-links';
 import { explorer, useExplorer } from '@/lib/explorer-state';
@@ -106,6 +107,7 @@ function TracesView({ params }: { params: TracesParams }) {
           selected={groupBy.length > 0}
           onPress={() => (groupBy.length > 0 ? explorer.setGroupBy('traces', []) : setGroupOpen(true))}
         />
+        <Chip label="Chart" onPress={() => explorer.setAggregate('traces', defaultTraceChart(groupBy))} />
         <Chip label="Errors" selected={errorsOnly} onPress={() => explorer.setErrorsOnly('traces', !errorsOnly)} />
         <Chip label="Slowest" selected={sort === 'slowest'} onPress={() => explorer.setSort('traces', sort === 'slowest' ? 'latest' : 'slowest')} />
         <Chip label="Root spans" selected={rootOnly} onPress={() => explorer.setRootOnly('traces', !rootOnly)} />

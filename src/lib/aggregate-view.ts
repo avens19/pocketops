@@ -1,7 +1,7 @@
 import { isValidKey, type Clause } from './filters';
 import { stepSeconds, type TimeRange } from './signoz/queries';
 import type { QueryRangeData, Series } from './signoz/types';
-import { savedViewQuery, type QueryEnvelope, type ViewSpec } from './signoz/views';
+import { savedViewQuery, viewSpecFromQuery, type QueryEnvelope, type ViewSpec } from './signoz/views';
 
 export interface AggregateField { name: string; fieldContext?: string; fieldDataType?: string; [key: string]: unknown }
 export interface Aggregation { expression: string; alias?: string; [key: string]: unknown }
@@ -86,4 +86,26 @@ export function configureAggregate(spec: ViewSpec, options: { aggregations: Aggr
     limit: options.limit,
     order: options.sort ? [{ key: orderKey, direction: options.direction }] : [],
   } }] };
+}
+
+/** Starting point for charting spans from the Traces tab: span count over time, one line per group (or a single line). */
+export function defaultTraceChart(groupBy: string[] = []): ViewSpec {
+  return viewSpecFromQuery('traces', { requestType: 'time_series', compositeQuery: { queries: [{
+    type: 'builder_query',
+    spec: {
+      name: 'A', signal: 'traces', filter: { expression: '' },
+      aggregations: [{ expression: 'count()', alias: 'count' }],
+      groupBy: groupBy.map((name) => ({ name })),
+      order: [], limit: groupBy.length ? 10 : 0,
+    },
+  }] } });
+}
+
+export const FIELD_FUNCTIONS = ['avg', 'sum', 'min', 'max', 'p50', 'p90', 'p95', 'p99'] as const;
+export type FieldFunction = (typeof FIELD_FUNCTIONS)[number];
+
+/** `avg(http.response.size)`-style aggregation for a picked field; span duration is shown in milliseconds rather than nanoseconds. */
+export function fieldAggregation(fn: FieldFunction, field: string): Aggregation {
+  const ms = field === 'duration_nano';
+  return { expression: `${fn}(${field})${ms ? ' / 1000000' : ''}`, alias: `${fn}_${ms ? 'duration_ms' : field.replace(/[^A-Za-z0-9_]/g, '_')}` };
 }

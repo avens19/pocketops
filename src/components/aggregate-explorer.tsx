@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
@@ -13,17 +13,18 @@ import { RangeChip } from './range-chip';
 import { SavedViewsBar, viewRangeParams } from './saved-views';
 import { SearchField } from './search-field';
 import { ThemedText } from './themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useDebounced } from '@/hooks/use-debounced';
+import { useTheme } from '@/hooks/use-theme';
 import { useWindowAnchor } from '@/hooks/use-window-anchor';
-import { aggregateDrillClauses, aggregateFields, aggregateQuery, aggregateRows, aggregateSeries, aggregations, configureAggregate, type AggregateRow } from '@/lib/aggregate-view';
+import { aggregateDrillClauses, aggregateFields, aggregateQuery, aggregateRows, aggregateSeries, aggregations, configureAggregate, FIELD_FUNCTIONS, fieldAggregation, type AggregateRow, type Aggregation, type FieldFunction } from '@/lib/aggregate-view';
 import { useClient } from '@/lib/auth';
 import { applyRouteFilter, exploreSignature, paramsLanded, type ExploreParams } from '@/lib/explore-links';
 import { explorer, useExplorer, type ExplorerSignal } from '@/lib/explorer-state';
 import { clausesToExpression, type Clause } from '@/lib/filters';
 import { formatValue } from '@/lib/format';
-import { queryRange } from '@/lib/signoz/api';
-import { logFilterExpression, quote, rangeSpecFromParams, resolveRange, type RangeSpec } from '@/lib/signoz/queries';
+import { fetchFieldKeys, queryRange } from '@/lib/signoz/api';
+import { logFilterExpression, quote, rangeSpecFromParams, resolveRange, type RangeSpec, type TimeRange } from '@/lib/signoz/queries';
 import { withViewFilter, type ViewSpec } from '@/lib/signoz/views';
 
 export function AggregateExplorer({ source, initial, params }: { source: ExplorerSignal; initial: ViewSpec; params: ExploreParams }) {
@@ -100,11 +101,52 @@ export function AggregateExplorer({ source, initial, params }: { source: Explore
           </Card>
         </Pressable>;
       }} />
-    {editing ? <AggregateEditor initial={aggregate} onClose={() => setEditing(false)} onApply={(spec) => { explorer.setAggregate(source, spec); setEditing(false); }} /> : null}
+    {editing ? <AggregateEditor source={source} range={resolved} initial={aggregate} onClose={() => setEditing(false)} onApply={(spec) => { explorer.setAggregate(source, spec); setEditing(false); }} /> : null}
   </>;
 }
 
-function AggregateEditor({ initial, onClose, onApply }: { initial: ViewSpec; onClose: () => void; onApply: (spec: ViewSpec) => void }) {
+const AGGREGATION_PRESETS = [
+  { label: 'Count', expression: 'count()', alias: 'count' },
+  { label: 'Avg duration', expression: 'avg(duration_nano) / 1000000', alias: 'avg_ms' },
+  { label: 'p50 duration', expression: 'p50(duration_nano) / 1000000', alias: 'p50_ms' },
+  { label: 'p90 duration', expression: 'p90(duration_nano) / 1000000', alias: 'p90_ms' },
+  { label: 'p95 duration', expression: 'p95(duration_nano) / 1000000', alias: 'p95_ms' },
+  { label: 'p99 duration', expression: 'p99(duration_nano) / 1000000', alias: 'p99_ms' },
+  { label: 'Max duration', expression: 'max(duration_nano) / 1000000', alias: 'max_ms' },
+];
+
+/** Choose a function, then search the fields seen in this window and tap a numeric one to aggregate it. */
+function FieldPicker({ source, range, onPick }: { source: ExplorerSignal; range: TimeRange; onPick: (a: Aggregation) => void }) {
+  const client = useClient();
+  const theme = useTheme();
+  const [open, setOpen] = useState(false);
+  const [fn, setFn] = useState<FieldFunction>('avg');
+  const [search, setSearch] = useState('');
+  const debounced = useDebounced(search.trim(), 300);
+  const windowKey = Math.floor(range.startMs / 60_000);
+  const keys = useQuery({
+    queryKey: ['field-keys', client.endpoint, source, debounced, windowKey],
+    queryFn: ({ signal }) => fetchFieldKeys(client, source, debounced, range, signal),
+    enabled: open, placeholderData: keepPreviousData, staleTime: 60_000,
+  });
+  if (!open) return <Chip label="Pick a field…" onPress={() => setOpen(true)} />;
+  const numeric = (keys.data ?? []).filter((k) => /int|float|number/i.test(k.dataType)).slice(0, 12);
+  return <View style={styles.header}>
+    <View style={styles.row}>{FIELD_FUNCTIONS.map((f) => <Chip key={f} label={f} selected={fn === f} onPress={() => setFn(f)} />)}</View>
+    <Field label="Numeric field" value={search} onChangeText={setSearch} placeholder="duration_nano" autoCapitalize="none" autoCorrect={false} />
+    <View style={{ borderRadius: Radius.medium, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border, overflow: 'hidden' }}>
+      {keys.isPending ? <ThemedText type="caption" style={styles.pad}>Loading fields…</ThemedText> : numeric.length === 0 ? <ThemedText type="caption" style={styles.pad}>No numeric fields match.</ThemedText> : numeric.map((k, i) =>
+        <Pressable key={k.name} accessibilityRole="button" onPress={() => { onPick(fieldAggregation(fn, k.name)); setOpen(false); setSearch(''); }}
+          style={[styles.pad, styles.row, { justifyContent: 'space-between', borderTopColor: theme.border, borderTopWidth: i ? StyleSheet.hairlineWidth : 0 }]}>
+          <ThemedText type="small" numberOfLines={1} style={{ flex: 1 }}>{k.name}</ThemedText>
+          <ThemedText type="caption">{k.dataType}</ThemedText>
+        </Pressable>)}
+    </View>
+    <Chip label="Cancel" onPress={() => setOpen(false)} />
+  </View>;
+}
+
+function AggregateEditor({ source, range, initial, onClose, onApply }: { source: ExplorerSignal; range: TimeRange; initial: ViewSpec; onClose: () => void; onApply: (spec: ViewSpec) => void }) {
   const q = initial.queries[0].spec;
   const [items, setItems] = useState(aggregations(initial));
   const [groupBy, setGroupBy] = useState(aggregateFields(initial).map((f) => f.name).join(', '));
@@ -121,6 +163,9 @@ function AggregateEditor({ initial, onClose, onApply }: { initial: ViewSpec; onC
   }
   return <Sheet visible title="Configure view" onClose={onClose} onApply={apply} canApply>
     {items.map((item, index) => <View key={index} style={styles.header}>
+      {source === 'traces' ? <View style={styles.row}>{AGGREGATION_PRESETS.map((p) => <Chip key={p.alias} label={p.label} selected={item.expression === p.expression}
+        onPress={() => setItems(items.map((a, i) => i === index ? { ...a, expression: p.expression, alias: p.alias } : a))} />)}</View> : null}
+      <FieldPicker source={source} range={range} onPick={(a) => setItems(items.map((x, i) => i === index ? { ...x, ...a } : x))} />
       <Field label={`Aggregation ${index + 1}`} value={item.expression} onChangeText={(expression) => setItems(items.map((a, i) => i === index ? { ...a, expression } : a))} placeholder="p90(duration_nano) / 1000000" />
       <Field label="Alias (optional)" value={item.alias ?? ''} onChangeText={(alias) => setItems(items.map((a, i) => i === index ? { ...a, alias } : a))} placeholder="p90_ms" />
       {items.length > 1 ? <Chip label="Remove aggregation" onPress={() => setItems(items.filter((_, i) => i !== index))} /> : null}
@@ -134,7 +179,7 @@ function AggregateEditor({ initial, onClose, onApply }: { initial: ViewSpec; onC
       {sortFields.map((name) => <Chip key={name} label={name} selected={sort === name} onPress={() => setSort(name)} />)}
       <Chip label={direction === 'desc' ? 'Descending' : 'Ascending'} onPress={() => setDirection(direction === 'desc' ? 'asc' : 'desc')} />
     </View>
-    <ThemedText type="caption">Aggregation expressions use SigNoz query syntax. Apply previews your changes; Update view saves them.</ThemedText>
+    <ThemedText type="caption">Presets show duration in milliseconds; type any expression for other fields, such as `avg(http.response.size)`. Aggregation expressions use SigNoz query syntax. Apply previews your changes; Update view saves them.</ThemedText>
     {error ? <ThemedText color="danger">{error}</ThemedText> : null}
   </Sheet>;
 }
@@ -142,5 +187,6 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.three, gap: Spacing.two },
   header: { gap: Spacing.two, marginBottom: Spacing.two },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
+  pad: { padding: Spacing.three },
   cell: { minWidth: 90, flexGrow: 1, gap: 2 },
 });

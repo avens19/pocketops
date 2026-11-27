@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { aggregateDrillClauses, aggregateQuery, aggregateRows, aggregateSeries, configureAggregate } from './aggregate-view';
+import { aggregateDrillClauses, aggregateQuery, aggregateRows, aggregateSeries, configureAggregate, defaultTraceChart, fieldAggregation } from './aggregate-view';
 import { explorer } from './explorer-state';
 import { asExplorerView, mergeExplorerView } from './explorer-view';
 import { clausesToExpression } from './filters';
@@ -117,4 +117,21 @@ it('renders the live Apollo response without labels and keeps the bytes percenti
   expect(parsed[0].series.name).toBe('p90(creditapp.apollo_cache.bytes)');
   expect(parsed[0].series.points.length).toBeGreaterThan(100);
   expect(parsed[0].series.points.every((p, i, all) => !i || p.t > all[i - 1].t)).toBe(true);
+});
+
+describe('defaultTraceChart', () => {
+  it('builds a valid span-count time series, grouped when asked', () => {
+    const plain = defaultTraceChart();
+    expect(plain).toMatchObject({ panelType: 'graph', requestType: 'time_series' });
+    expect(aggregateQuery(plain, range).compositeQuery.queries[0].spec).toMatchObject({ signal: 'traces', stepInterval: expect.any(Number), groupBy: [] });
+    const grouped = defaultTraceChart(['service.name']);
+    expect(grouped.queries[0].spec).toMatchObject({ groupBy: [{ name: 'service.name' }], limit: 10 });
+  });
+});
+
+describe('fieldAggregation', () => {
+  it('builds expressions and safe aliases, converting duration to ms', () => {
+    expect(fieldAggregation('p95', 'duration_nano')).toEqual({ expression: 'p95(duration_nano) / 1000000', alias: 'p95_duration_ms' });
+    expect(fieldAggregation('avg', 'http.response.size')).toEqual({ expression: 'avg(http.response.size)', alias: 'avg_http_response_size' });
+  });
 });
