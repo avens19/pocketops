@@ -150,7 +150,7 @@ function AggregateEditor({ source, range, initial, onClose, onApply }: { source:
   const q = initial.queries[0].spec;
   const [items, setItems] = useState(aggregations(initial));
   const [groupBy, setGroupBy] = useState(aggregateFields(initial).map((f) => f.name).join(', '));
-  const [limit, setLimit] = useState(String(q.limit ?? 50));
+  const [limit, setLimit] = useState(String(Number(q.limit) > 0 ? q.limit : 50));
   const initialOrder = (q.order as { key: { name: string }; direction: 'asc' | 'desc' }[] | null)?.[0];
   const [sort, setSort] = useState(initialOrder?.key.name ?? '');
   const [direction, setDirection] = useState<'asc' | 'desc'>(initialOrder?.direction ?? 'desc');

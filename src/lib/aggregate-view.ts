@@ -96,7 +96,7 @@ export function defaultTraceChart(groupBy: string[] = []): ViewSpec {
       name: 'A', signal: 'traces', filter: { expression: '' },
       aggregations: [{ expression: 'count()', alias: 'count' }],
       groupBy: groupBy.map((name) => ({ name })),
-      order: [], limit: groupBy.length ? 10 : 0,
+      order: [], limit: groupBy.length ? 10 : 50,
     },
   }] } });
 }
